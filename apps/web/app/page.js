@@ -74,15 +74,13 @@ export default function Page() {
     });
 
     if (typeof window !== "undefined") {
-      const existing = localStorage.getItem("shelf_gemini_api_key");
-      if (!existing) {
-        try {
-          localStorage.setItem(
-            "shelf_gemini_api_key",
-            atob("QUl6YVN5RGNkenFIN0pGQ3NkNndST1dNM3lmcExpR004YWJLSk9z")
-          );
-        } catch {}
-      }
+      // Security auto-scrub: Purge any legacy shared keys from client storage
+      try {
+        const stored = localStorage.getItem("shelf_gemini_api_key");
+        if (stored && !localStorage.getItem("shelf_byok_active")) {
+          localStorage.removeItem("shelf_gemini_api_key");
+        }
+      } catch {}
     }
 
     if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
@@ -371,19 +369,28 @@ export default function Page() {
     queueOcrProcessing(target);
   }
 
-  // Manage Gemini API Key in browser
+  // Manage Optional Personal BYOK Gemini API Key (stored strictly in user's browser)
   function handleApiKeyPrompt() {
-    const current =
-      localStorage.getItem("shelf_gemini_api_key") ||
-      atob("QUl6YVN5RGNkenFIN0pGQ3NkNndST1dNM3lmcExpR004YWJLSk9z");
-    const entered = window.prompt(
-      "Gemini Flash API Key for high-speed OCR & Vision:",
-      current
-    );
+    const current = localStorage.getItem("shelf_gemini_api_key") || "";
+    const displayMasked = current
+      ? `${current.slice(0, 6)}...${current.slice(-4)}`
+      : "";
+    const promptMsg = current
+      ? `A personal Gemini key is saved in this browser (${displayMasked}).\n\nEnter a new key, or leave blank to clear:`
+      : "Enter your personal Gemini API Key (Optional BYOK for private client session):";
+
+    const entered = window.prompt(promptMsg);
     if (entered !== null) {
       const trimmed = entered.trim();
-      localStorage.setItem("shelf_gemini_api_key", trimmed);
-      setNotice(trimmed ? "✓ Gemini API Key configured." : "Cleared Gemini API key.");
+      if (trimmed) {
+        localStorage.setItem("shelf_gemini_api_key", trimmed);
+        localStorage.setItem("shelf_byok_active", "true");
+        setNotice("✓ Personal API Key saved to your local browser.");
+      } else {
+        localStorage.removeItem("shelf_gemini_api_key");
+        localStorage.removeItem("shelf_byok_active");
+        setNotice("Cleared personal API key.");
+      }
       setTimeout(() => setNotice(""), 3000);
     }
   }
@@ -547,14 +554,14 @@ export default function Page() {
               type="button"
               className="btn-folder"
               onClick={handleApiKeyPrompt}
-              title="Manage Gemini AI API Key for OCR & Vision"
+              title="Optional BYOK: Set a personal Gemini API key in this browser"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "5px",
-                background: "rgba(16, 185, 129, 0.12)",
-                borderColor: "rgba(16, 185, 129, 0.4)",
-                color: "#6ee7b7",
+                background: "rgba(243, 236, 223, 0.06)",
+                borderColor: "rgba(243, 236, 223, 0.14)",
+                color: "#cbbfaa",
               }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -563,7 +570,7 @@ export default function Page() {
                 <path d="M16 7l2 2" />
                 <path d="M18 5l2 2" />
               </svg>
-              <span>API Key</span>
+              <span>BYOK (Optional)</span>
             </button>
 
             {userShots.length > 0 && (

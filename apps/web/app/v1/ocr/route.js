@@ -8,12 +8,11 @@ export async function POST(request) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
+    // Secure Server-Side Authorization:
+    // 1. process.env.GEMINI_API_KEY (Encrypted server environment variable on Vercel)
+    // 2. Or optional client BYOK header (only if visitor provides their own key in their browser)
     const clientKey = request.headers.get("x-gemini-key");
-    const fallbackKey = Buffer.from(
-      "QUl6YVN5RGNkenFIN0pGQ3NkNndST1dNM3lmcExpR004YWJLSk9z",
-      "base64"
-    ).toString("utf-8");
-    const apiKey = process.env.GEMINI_API_KEY || clientKey || fallbackKey;
+    const apiKey = process.env.GEMINI_API_KEY || clientKey;
 
     if (!apiKey) {
       return NextResponse.json({ ok: false, fallback: true, reason: "no_api_key" });
