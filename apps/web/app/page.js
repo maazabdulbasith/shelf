@@ -76,48 +76,81 @@ export default function Page() {
     }
   }, []);
 
-  // 2. Background OCR worker queue
+  // 2. High-speed parallel OCR worker pool (concurrency = 6)
   async function queueOcrProcessing(shotsToProcess) {
     if (ocrRunningRef.current || !shotsToProcess.length) return;
     ocrRunningRef.current = true;
     setIsOcrRunning(true);
 
     const total = shotsToProcess.length;
-    setNotice(`Running OCR on ${total} screenshot${total > 1 ? "s" : ""}…`);
+    let completedCount = 0;
+    setNotice(`⚡ Fast-indexing ${total} picture${total > 1 ? "s" : ""} in parallel…`);
 
-    for (let i = 0; i < total; i++) {
-      const shot = shotsToProcess[i];
-      setNotice(`Extracting text from picture ${i + 1} of ${total}: "${shot.filename}"…`);
+    const CONCURRENCY = 6;
+    let currentIndex = 0;
+    const pendingUpdates = [];
 
-      try {
-        const ocr = await runOcrOnImage(shot.src, shot.filename);
-        const updatedShot = {
-          ...shot,
-          text: `${shot.filename} ${ocr.text || ""}`.trim(),
-          caption: ocr.caption || shot.caption,
-          kind: ocr.kind || shot.kind || "photo",
-          ocrDone: true,
-          ocrEngine: ocr.engine,
-          actions: ocr.action
-            ? [ocr.action, ...(shot.actions || [])]
-            : shot.actions || [],
-        };
+    const flushBatch = async () => {
+      if (pendingUpdates.length === 0) return;
+      const toFlush = pendingUpdates.splice(0, pendingUpdates.length);
+      const idMap = new Map(toFlush.map((s) => [s.id, s]));
 
-        await saveLocalShot(updatedShot);
+      setUserShots((prev) =>
+        prev.map((s) => (idMap.has(s.id) ? idMap.get(s.id) : s))
+      );
+      await saveLocalShotsBatch(toFlush);
+    };
 
-        // Update state in real time so card status and search update immediately
-        setUserShots((prev) =>
-          prev.map((s) => (s.id === shot.id ? updatedShot : s))
-        );
-      } catch (err) {
-        console.error("OCR failure on shot:", shot.id, err);
+    const worker = async () => {
+      while (currentIndex < total) {
+        const itemIndex = currentIndex++;
+        const shot = shotsToProcess[itemIndex];
+        if (!shot) break;
+
+        try {
+          const ocr = await runOcrOnImage(shot.src, shot.filename);
+          const updatedShot = {
+            ...shot,
+            text: `${shot.filename} ${ocr.text || ""}`.trim(),
+            caption: ocr.caption || shot.caption,
+            kind: ocr.kind || shot.kind || "photo",
+            ocrDone: true,
+            ocrEngine: ocr.engine,
+            actions: ocr.action
+              ? [ocr.action, ...(shot.actions || [])]
+              : shot.actions || [],
+          };
+
+          pendingUpdates.push(updatedShot);
+          completedCount++;
+
+          setNotice(
+            `⚡ Fast-indexed ${completedCount} of ${total} pictures (${Math.round((completedCount / total) * 100)}%)…`
+          );
+
+          if (pendingUpdates.length >= 4) {
+            await flushBatch();
+          }
+        } catch (err) {
+          console.error("OCR failure on shot:", shot.id, err);
+          completedCount++;
+        }
       }
+    };
+
+    const workers = [];
+    const poolSize = Math.min(CONCURRENCY, total);
+    for (let i = 0; i < poolSize; i++) {
+      workers.push(worker());
     }
+
+    await Promise.all(workers);
+    await flushBatch();
 
     setIsOcrRunning(false);
     ocrRunningRef.current = false;
-    setNotice(`✓ OCR completed for ${total} picture${total > 1 ? "s" : ""}. You can search any word!`);
-    setTimeout(() => setNotice(""), 4000);
+    setNotice(`✓ Fast indexing complete: ${total} picture${total > 1 ? "s" : ""} searchable instantly!`);
+    setTimeout(() => setNotice(""), 3500);
   }
 
   // 3. Fetch server/demo shots when searched
@@ -181,7 +214,7 @@ export default function Page() {
     setNotice(`Scanning ${files.length} picture${files.length > 1 ? "s" : ""} on device…`);
 
     const newShots = [];
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 12;
 
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const chunk = files.slice(i, i + BATCH_SIZE);
