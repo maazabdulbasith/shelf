@@ -97,11 +97,12 @@ export async function runOcrOnImage(dataUrl, filename = "") {
 
     if (res.ok) {
       const data = await res.json();
-      if (data.ok && data.text !== undefined) {
+      if (data.ok && (data.text !== undefined || data.caption)) {
         return {
           text: data.text || "",
           caption: data.caption,
-          kind: data.kind,
+          tags: data.tags || [],
+          kind: data.kind || "photo",
           action: data.action,
           engine: "gemini-flash",
         };

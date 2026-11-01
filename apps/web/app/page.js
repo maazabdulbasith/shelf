@@ -65,8 +65,10 @@ export default function Page() {
       if (shots.length === 0) {
         setIncludeDemoShots(true);
       } else {
-        // Find shots that still need text extraction
-        const unindexed = shots.filter((s) => !s.ocrDone && s.src);
+        // Find shots that need text extraction or multimodal visual semantic tags
+        const unindexed = shots.filter(
+          (s) => (!s.ocrDone || !s.tags || s.tags.length === 0) && s.src
+        );
         if (unindexed.length > 0) {
           queueOcrProcessing(unindexed);
         }
@@ -121,10 +123,16 @@ export default function Page() {
 
         try {
           const ocr = await runOcrOnImage(shot.src, shot.filename);
+          const tagsList = Array.isArray(ocr.tags) ? ocr.tags : [];
+          const tagsStr = tagsList.join(" ");
+          const combinedIndex = `${shot.filename} ${ocr.text || ""} ${ocr.caption || ""} ${tagsStr} ${ocr.kind || ""}`.toLowerCase();
+
           const updatedShot = {
             ...shot,
             text: `${shot.filename} ${ocr.text || ""}`.trim(),
             caption: ocr.caption || shot.caption,
+            tags: tagsList,
+            searchIndex: combinedIndex,
             kind: ocr.kind || shot.kind || "photo",
             ocrDone: true,
             ocrEngine: ocr.engine,
@@ -362,9 +370,11 @@ export default function Page() {
     setTimeout(() => setNotice(""), 2500);
   }
 
-  // Re-run OCR on all local shots that need it
+  // Re-run Visual AI & OCR on local shots that need semantic tags
   function handleReindexOcr() {
-    const unindexed = userShots.filter((s) => !s.ocrDone && s.src);
+    const unindexed = userShots.filter(
+      (s) => (!s.ocrDone || !s.tags || s.tags.length === 0) && s.src
+    );
     const target = unindexed.length > 0 ? unindexed : userShots;
     queueOcrProcessing(target);
   }
@@ -408,15 +418,27 @@ export default function Page() {
     }
   }
 
-  // Filter user's shots if there is an active search query
+  // Filter user's shots if there is an active search query (text + visual semantic tags)
   const qLower = query.trim().toLowerCase();
   const filteredUserShots = qLower
     ? userShots.filter((s) => {
+        if (s.searchIndex && s.searchIndex.includes(qLower)) return true;
         const textMatch = s.text && s.text.toLowerCase().includes(qLower);
         const titleMatch = s.title && s.title.toLowerCase().includes(qLower);
         const captionMatch = s.caption && s.caption.toLowerCase().includes(qLower);
         const filenameMatch = s.filename && s.filename.toLowerCase().includes(qLower);
-        return textMatch || titleMatch || captionMatch || filenameMatch;
+        const kindMatch = s.kind && s.kind.toLowerCase().includes(qLower);
+        const tagMatch =
+          Array.isArray(s.tags) &&
+          s.tags.some((t) => t.toLowerCase().includes(qLower));
+        return (
+          textMatch ||
+          titleMatch ||
+          captionMatch ||
+          filenameMatch ||
+          kindMatch ||
+          tagMatch
+        );
       })
     : userShots;
 
@@ -431,7 +453,7 @@ export default function Page() {
       : isScanning
       ? "Scanning media…"
       : isOcrRunning
-      ? "Running OCR…"
+      ? "Visual AI…"
       : phase === "searching"
       ? "Rearranging"
       : `${allShots.length} on the wall`;
@@ -439,7 +461,9 @@ export default function Page() {
   const isSearchActive = query.trim().length > 0;
   const hasNoSearchResults = isSearchActive && allShots.length === 0;
 
-  const unindexedCount = userShots.filter((s) => !s.ocrDone).length;
+  const unindexedCount = userShots.filter(
+    (s) => !s.ocrDone || !s.tags || s.tags.length === 0
+  ).length;
 
   return (
     <div
@@ -537,7 +561,7 @@ export default function Page() {
                 }}
                 title="Extract text from scanned pictures"
               >
-                <span>{isOcrRunning ? "Extracting Text…" : `⚡ Scan Text (${unindexedCount})`}</span>
+                <span>{isOcrRunning ? "Analyzing Visual AI…" : `⚡ Scan Visual AI (${unindexedCount})`}</span>
               </button>
             )}
 

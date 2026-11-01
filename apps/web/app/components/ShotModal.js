@@ -281,6 +281,30 @@ export default function ShotModal({ shot, allShots = [], onClose, onSelectShot }
               </p>
             </div>
 
+            {/* Visual Semantic Tags */}
+            {Array.isArray(shot.tags) && shot.tags.length > 0 && (
+              <div className="shot-modal-section">
+                <h4>Visual AI Tags</h4>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {shot.tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        fontSize: "11px",
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        background: "rgba(228, 177, 90, 0.12)",
+                        color: "#fde68a",
+                        border: "1px solid rgba(228, 177, 90, 0.25)",
+                      }}
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Extracted Text (OCR) */}
             <div className="shot-modal-section">
               <div className="shot-modal-section-header">
