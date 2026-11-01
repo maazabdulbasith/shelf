@@ -673,6 +673,56 @@ button { cursor: pointer; }
   font-family: monospace;
 }
 
+/* Quick Category Filter Bar */
+.quick-filter-bar {
+  width: min(1180px, calc(100% - 40px));
+  margin: 8px auto 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.quick-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-filter-inner {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.quick-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(243, 236, 223, 0.06);
+  border: 1px solid rgba(243, 236, 223, 0.1);
+  color: #cbbfaa;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.quick-filter-pill:hover {
+  background: rgba(243, 236, 223, 0.12);
+  color: #fff;
+  border-color: rgba(228, 177, 90, 0.3);
+}
+
+.quick-filter-pill.active {
+  background: #e4b15a;
+  color: #17120a;
+  border-color: #e4b15a;
+  font-weight: 650;
+  box-shadow: 0 4px 14px rgba(228, 177, 90, 0.3);
+}
+
 /* Card Clickable Hover & Cursor */
 .card-interactive {
   cursor: pointer;

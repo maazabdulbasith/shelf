@@ -8,6 +8,7 @@ import Logo from "./components/Logo";
 import ShotCard from "./components/ShotCard";
 import ShotModal from "./components/ShotModal";
 import { askShelf, fetchShots } from "./lib/api";
+import { searchShots } from "./lib/search";
 import {
   clearAllLocalShots,
   deleteLocalShot,
@@ -34,6 +35,18 @@ function applyShots(next, setShots) {
     rearranging = false;
   });
 }
+
+const QUICK_FILTERS = [
+  { label: "All", icon: "✨", query: "" },
+  { label: "Family & People", icon: "👨‍👩‍👧", query: "family" },
+  { label: "Groups & Friends", icon: "👥", query: "group" },
+  { label: "Receipts & Bills", icon: "🧾", query: "receipt" },
+  { label: "Code & Dev", icon: "💻", query: "code" },
+  { label: "Dashboards", icon: "📊", query: "dashboard" },
+  { label: "Food & Drinks", icon: "🍔", query: "food" },
+  { label: "Nature & Travel", icon: "🌄", query: "nature" },
+  { label: "Chats & Messages", icon: "💬", query: "chat" },
+];
 
 export default function Page() {
   const [query, setQuery] = useState("");
@@ -418,32 +431,10 @@ export default function Page() {
     }
   }
 
-  // Filter user's shots if there is an active search query (text + visual semantic tags)
-  const qLower = query.trim().toLowerCase();
-  const filteredUserShots = qLower
-    ? userShots.filter((s) => {
-        if (s.searchIndex && s.searchIndex.includes(qLower)) return true;
-        const textMatch = s.text && s.text.toLowerCase().includes(qLower);
-        const titleMatch = s.title && s.title.toLowerCase().includes(qLower);
-        const captionMatch = s.caption && s.caption.toLowerCase().includes(qLower);
-        const filenameMatch = s.filename && s.filename.toLowerCase().includes(qLower);
-        const kindMatch = s.kind && s.kind.toLowerCase().includes(qLower);
-        const tagMatch =
-          Array.isArray(s.tags) &&
-          s.tags.some((t) => t.toLowerCase().includes(qLower));
-        return (
-          textMatch ||
-          titleMatch ||
-          captionMatch ||
-          filenameMatch ||
-          kindMatch ||
-          tagMatch
-        );
-      })
-    : userShots;
-
-  // Active shots displayed on the wall
-  const activeServerShots = includeDemoShots ? serverShots : [];
+  // Intelligent Multi-Term Semantic Search & Scoring
+  const isSearchActive = query.trim().length > 0;
+  const filteredUserShots = searchShots(userShots, query);
+  const activeServerShots = includeDemoShots ? searchShots(serverShots, query) : [];
   const allShots = [...filteredUserShots, ...activeServerShots];
 
   const compact = pinned || query.length > 0;
@@ -458,7 +449,6 @@ export default function Page() {
       ? "Rearranging"
       : `${allShots.length} on the wall`;
 
-  const isSearchActive = query.trim().length > 0;
   const hasNoSearchResults = isSearchActive && allShots.length === 0;
 
   const unindexedCount = userShots.filter(
@@ -610,6 +600,29 @@ export default function Page() {
           </div>
         </div>
       </header>
+
+      {/* Quick Visual Category Filter Bar */}
+      <nav className="quick-filter-bar" aria-label="Visual Categories">
+        <div className="quick-filter-inner">
+          {QUICK_FILTERS.map((f) => {
+            const isActive =
+              f.query === ""
+                ? query.trim() === ""
+                : query.trim().toLowerCase() === f.query.toLowerCase();
+            return (
+              <button
+                key={f.label}
+                type="button"
+                className={isActive ? "quick-filter-pill active" : "quick-filter-pill"}
+                onClick={() => setQuery(isActive && f.query !== "" ? "" : f.query)}
+              >
+                <span>{f.icon}</span>
+                <span>{f.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {notice ? <p className="notice">{notice}</p> : null}
 
