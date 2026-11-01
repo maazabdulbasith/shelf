@@ -417,7 +417,7 @@ export async function GET(request) {
     .sort((a, b) => b._totalScore - a._totalScore);
 
   return NextResponse.json({
-    shots: filtered.length > 0 ? filtered : allShots,
+    shots: filtered,
   });
 }
 

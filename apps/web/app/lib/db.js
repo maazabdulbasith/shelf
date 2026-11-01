@@ -52,6 +52,24 @@ export async function saveLocalShot(shot) {
   });
 }
 
+export async function saveLocalShotsBatch(shots) {
+  const db = await openDB();
+  if (!db || !shots.length) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      for (const s of shots) {
+        store.put(s);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 export async function deleteLocalShot(id) {
   const db = await openDB();
   if (!db) return;
@@ -60,6 +78,22 @@ export async function deleteLocalShot(id) {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function clearAllLocalShots() {
+  const db = await openDB();
+  if (!db) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     } catch {

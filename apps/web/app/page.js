@@ -7,7 +7,12 @@ import AskDock from "./components/AskDock";
 import Logo from "./components/Logo";
 import ShotCard from "./components/ShotCard";
 import { askShelf, fetchShots } from "./lib/api";
-import { deleteLocalShot, getLocalShots, saveLocalShot } from "./lib/db";
+import {
+  clearAllLocalShots,
+  deleteLocalShot,
+  getLocalShots,
+  saveLocalShotsBatch,
+} from "./lib/db";
 
 let rearranging = false;
 
@@ -31,6 +36,7 @@ export default function Page() {
   const [query, setQuery] = useState("");
   const [serverShots, setServerShots] = useState([]);
   const [userShots, setUserShots] = useState([]);
+  const [includeDemoShots, setIncludeDemoShots] = useState(false);
   const [phase, setPhase] = useState("loading");
   const [notice, setNotice] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
@@ -40,6 +46,7 @@ export default function Page() {
   const [asking, setAsking] = useState(false);
   const [open, setOpen] = useState(false);
   const [hasDirectoryPicker, setHasDirectoryPicker] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const loaded = useRef(false);
   const fileInputRef = useRef(null);
@@ -47,24 +54,30 @@ export default function Page() {
   // 1. Load user's local shots from IndexedDB on mount
   useEffect(() => {
     getLocalShots().then((local) => {
-      setUserShots(local || []);
+      const shots = local || [];
+      setUserShots(shots);
+      // If user has zero local shots yet, include demo shots so the wall isn't completely bare on first open
+      if (shots.length === 0) {
+        setIncludeDemoShots(true);
+      }
     });
+
     if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
       setHasDirectoryPicker(true);
     }
   }, []);
 
-  // 2. Fetch server / golden shots with search query
+  // 2. Fetch server/demo shots when active or searched
   useEffect(() => {
     const controller = new AbortController();
     const handle = setTimeout(async () => {
       setPhase((current) => (current === "loading" ? "loading" : "searching"));
-      let next;
+      let next = [];
       try {
         next = await fetchShots(query, controller.signal);
       } catch (error) {
         if (error.name === "AbortError") return;
-        setNotice(loaded.current ? "Search did not finish. The wall stayed put." : "The shelf is not answering.");
+        setNotice(loaded.current ? "Search did not finish." : "Shelf is running local-first.");
         setPhase(loaded.current ? "ready" : "offline");
         return;
       }
@@ -73,6 +86,7 @@ export default function Page() {
       setNotice("");
       setPhase("ready");
     }, 200);
+
     return () => {
       clearTimeout(handle);
       controller.abort();
@@ -98,102 +112,157 @@ export default function Page() {
     };
   }, []);
 
-  // Process & persist a single file to IndexedDB
-  async function processAndSaveFile(file) {
+  // Read File as DataURL
+  function readFileAsDataUrl(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result;
-        const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        const cleanName = file.name.replace(/\.[^/.]+$/, "");
-        const shot = {
-          id,
-          src: dataUrl,
-          filename: file.name,
-          title: cleanName,
-          text: file.name.toLowerCase().replace(/[-_.]/g, " "),
-          caption: `Device screenshot: ${file.name}`,
-          kind: "photo",
-          status: "local",
-          isUserUploaded: true,
-          created_at: Date.now(),
-          actions: [
-            { kind: "copy_text", label: "Copy Filename", value: file.name },
-          ],
-          highlights: [],
-        };
-        await saveLocalShot(shot);
-        setUserShots((prev) => [shot, ...prev.filter((s) => s.id !== id)]);
-        resolve(shot);
-      };
+      reader.onload = () => resolve(reader.result);
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(file);
     });
   }
 
-  // Handle Photo Picker from Mobile Gallery or Desktop File Browser
-  async function onFileSelect(event) {
-    const files = Array.from(event.target.files || []);
+  // Batch process and persist files to IndexedDB
+  async function processFilesBatch(files) {
     if (!files.length) return;
-    setNotice(`Importing ${files.length} screenshot${files.length > 1 ? "s" : ""} from your gallery…`);
-    for (const file of files) {
-      if (file.type.startsWith("image/")) {
-        await processAndSaveFile(file);
-      }
+    setIsScanning(true);
+    setNotice(`Scanning ${files.length} picture${files.length > 1 ? "s" : ""} on device…`);
+
+    const newShots = [];
+    const BATCH_SIZE = 5;
+
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const chunk = files.slice(i, i + BATCH_SIZE);
+      const processedChunk = await Promise.all(
+        chunk.map(async (file) => {
+          const dataUrl = await readFileAsDataUrl(file);
+          if (!dataUrl) return null;
+
+          const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const cleanName = file.name.replace(/\.[^/.]+$/, "");
+          return {
+            id,
+            src: dataUrl,
+            filename: file.name,
+            title: cleanName,
+            text: file.name.toLowerCase().replace(/[-_.]/g, " "),
+            caption: `Photo: ${file.name}`,
+            kind: "photo",
+            status: "device",
+            isUserUploaded: true,
+            created_at: Date.now(),
+            actions: [
+              { kind: "copy_text", label: "Copy Filename", value: file.name },
+            ],
+            highlights: [],
+          };
+        })
+      );
+
+      const validShots = processedChunk.filter(Boolean);
+      newShots.push(...validShots);
+      setNotice(`Processed ${Math.min(i + BATCH_SIZE, files.length)} of ${files.length}…`);
     }
-    setNotice(`Added ${files.length} screenshot${files.length > 1 ? "s" : ""} to your local shelf.`);
-    setTimeout(() => setNotice(""), 3000);
-    if (event.target) event.target.value = "";
+
+    if (newShots.length > 0) {
+      await saveLocalShotsBatch(newShots);
+      setUserShots((prev) => [...newShots, ...prev]);
+      // Once user has their own photos, default demo dataset to off so their wall is pure
+      setIncludeDemoShots(false);
+      setNotice(`Saved ${newShots.length} picture${newShots.length > 1 ? "s" : ""} to your local shelf.`);
+    } else {
+      setNotice("No readable images found in selection.");
+    }
+
+    setIsScanning(false);
+    setTimeout(() => setNotice(""), 3500);
   }
 
-  // Handle Directory Picker on Desktop (Chrome / Edge)
-  async function onPickDirectory() {
-    if (!window.showDirectoryPicker) return;
-    try {
-      const dirHandle = await window.showDirectoryPicker();
-      let importedCount = 0;
-      setNotice("Scanning local screenshots folder…");
-      for await (const entry of dirHandle.values()) {
-        if (entry.kind === "file") {
-          const name = entry.name.toLowerCase();
-          if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp")) {
+  // Recursive directory scanner for File System Access API
+  async function scanDirectoryEntries(dirHandle, fileList = [], maxFiles = 300) {
+    if (fileList.length >= maxFiles) return fileList;
+    for await (const entry of dirHandle.values()) {
+      if (fileList.length >= maxFiles) break;
+      if (entry.kind === "file") {
+        const name = entry.name.toLowerCase();
+        if (/\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(name)) {
+          try {
             const file = await entry.getFile();
-            await processAndSaveFile(file);
-            importedCount++;
+            fileList.push(file);
+          } catch {
+            // Ignore unreadable file
           }
         }
-      }
-      setNotice(`Synced ${importedCount} screenshot${importedCount === 1 ? "" : "s"} from folder.`);
-      setTimeout(() => setNotice(""), 3500);
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        setNotice("Folder access was not granted.");
+      } else if (entry.kind === "directory") {
+        try {
+          await scanDirectoryEntries(entry, fileList, maxFiles);
+        } catch {
+          // Ignore restricted directory
+        }
       }
     }
+    return fileList;
+  }
+
+  // Grant Storage Permission & Scan Photos
+  async function onGrantPermission() {
+    if (hasDirectoryPicker) {
+      try {
+        setNotice("Opening folder picker — select your Pictures or Screenshots folder…");
+        const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+        setNotice("Storage access granted. Scanning photos…");
+        const foundFiles = await scanDirectoryEntries(dirHandle);
+        await processFilesBatch(foundFiles);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          // If directory picker fails, fall back to file picker
+          fileInputRef.current?.click();
+        } else {
+          setNotice("");
+        }
+      }
+    } else {
+      // Mobile or browsers without showDirectoryPicker
+      fileInputRef.current?.click();
+    }
+  }
+
+  // Handle Photo Picker from Mobile Gallery or Desktop File Dialog
+  async function onFileSelect(event) {
+    const files = Array.from(event.target.files || []).filter((f) =>
+      f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(f.name)
+    );
+    if (!files.length) return;
+    await processFilesBatch(files);
+    if (event.target) event.target.value = "";
   }
 
   // Handle Drag & Drop of multiple files
   async function onDrop(event) {
     event.preventDefault();
     setDragDepth(0);
-    const files = Array.from(event.dataTransfer.files || []);
+    const files = Array.from(event.dataTransfer.files || []).filter((f) =>
+      f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(f.name)
+    );
     if (!files.length) return;
-    setNotice(`Keeping ${files.length} screenshot${files.length > 1 ? "s" : ""} on device…`);
-    for (const f of files) {
-      if (f.type.startsWith("image/")) {
-        await processAndSaveFile(f);
-      }
-    }
-    setNotice(`Saved ${files.length} screenshot${files.length > 1 ? "s" : ""} to local shelf.`);
-    setTimeout(() => setNotice(""), 2500);
+    await processFilesBatch(files);
   }
 
-  // Handle Deleting a user-uploaded shot from IndexedDB
+  // Delete a user-uploaded shot from IndexedDB
   async function handleDelete(id) {
     await deleteLocalShot(id);
     setUserShots((prev) => prev.filter((s) => s.id !== id));
-    setNotice("Removed screenshot from local shelf.");
+    setNotice("Removed picture from your shelf.");
     setTimeout(() => setNotice(""), 2000);
+  }
+
+  // Clear all local pictures
+  async function handleClearAll() {
+    if (!window.confirm("Remove all scanned pictures from your local shelf?")) return;
+    await clearAllLocalShots();
+    setUserShots([]);
+    setNotice("Local shelf cleared.");
+    setTimeout(() => setNotice(""), 2500);
   }
 
   // Ask LlamaIndex synthesizer
@@ -222,16 +291,22 @@ export default function Page() {
       })
     : userShots;
 
-  // Combine user's personal shots + golden set shots
-  const allShots = [...filteredUserShots, ...serverShots];
+  // Active shots displayed on the wall
+  const activeServerShots = includeDemoShots ? serverShots : [];
+  const allShots = [...filteredUserShots, ...activeServerShots];
 
   const compact = pinned || query.length > 0;
   const countLabel =
     phase === "loading"
       ? "Opening the wall"
+      : isScanning
+      ? "Scanning media…"
       : phase === "searching"
       ? "Rearranging"
       : `${allShots.length} on the wall`;
+
+  const isSearchActive = query.trim().length > 0;
+  const hasNoSearchResults = isSearchActive && allShots.length === 0;
 
   return (
     <div
@@ -246,8 +321,8 @@ export default function Page() {
     >
       <AmbientField />
       <div className="veil" aria-hidden="true" />
-      
-      {/* Hidden File Picker for Mobile Camera Roll / Desktop Files */}
+
+      {/* Native Photo/File Picker for Mobile Gallery or Desktop */}
       <input
         ref={fileInputRef}
         type="file"
@@ -276,7 +351,24 @@ export default function Page() {
             onChange={(event) => setQuery(event.target.value)}
             autoComplete="off"
           />
-          <kbd>/</kbd>
+          {query ? (
+            <button
+              type="button"
+              className="btn-clear-search"
+              onClick={() => setQuery("")}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#cbbfaa",
+                cursor: "pointer",
+                padding: "4px 8px",
+              }}
+            >
+              ✕
+            </button>
+          ) : (
+            <kbd>/</kbd>
+          )}
         </label>
 
         <div className="mast-end">
@@ -287,62 +379,113 @@ export default function Page() {
             <button
               type="button"
               className="btn-gallery"
-              onClick={() => fileInputRef.current?.click()}
-              title="Pick screenshots from phone gallery or files"
+              onClick={onGrantPermission}
+              disabled={isScanning}
+              title="Grant permission to scan your photos / gallery"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
-                <circle cx="9" cy="9" r="2"/>
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
-              <span>Add from Gallery</span>
+              <span>{hasDirectoryPicker ? "Scan Folder" : "Add from Gallery"}</span>
             </button>
-            {hasDirectoryPicker ? (
+
+            <button
+              type="button"
+              className="btn-folder"
+              onClick={() => setIncludeDemoShots((prev) => !prev)}
+              title="Toggle 20 golden sample screenshots"
+            >
+              <span>{includeDemoShots ? "Hide Demo Cards" : "Show Demo Cards"}</span>
+            </button>
+
+            {userShots.length > 0 && (
               <button
                 type="button"
-                className="btn-folder"
-                onClick={onPickDirectory}
-                title="Sync local screenshots folder"
+                className="btn-card-delete"
+                onClick={handleClearAll}
+                title="Clear all imported photos"
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
-                </svg>
-                <span>Folder</span>
+                Clear Mine
               </button>
-            ) : null}
+            )}
           </div>
         </div>
       </header>
 
       {notice ? <p className="notice">{notice}</p> : null}
 
-      {allShots.length === 0 && phase !== "loading" ? (
-        <section className="empty">
-          <p>The wall is clear.</p>
-          <span>Tap <strong>Add from Gallery</strong> to select screenshots from your device.</span>
-          <div style={{ marginTop: "18px" }}>
+      {/* Prominent Storage Permission & Connect Hero (Shown when shelf has no user photos yet and no active search) */}
+      {userShots.length === 0 && !isSearchActive && (
+        <section className="permission-hero">
+          <span className="permission-badge">Local-First Storage Access</span>
+          <h2>Connect Your Photos & Screenshots</h2>
+          <p>
+            Shelf runs 100% on your device with zero cloud tracking. Grant storage permission to scan your Pictures folder or pick screenshots directly from your device gallery.
+          </p>
+          <div className="permission-actions">
             <button
               type="button"
-              className="btn-gallery"
-              style={{ padding: "10px 20px", fontSize: "14px" }}
+              className="btn-primary-grant"
+              onClick={onGrantPermission}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+              </svg>
+              <span>{hasDirectoryPicker ? "Grant Storage Permission & Scan Media" : "Select Photos from Gallery"}</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-secondary-action"
               onClick={() => fileInputRef.current?.click()}
             >
-              📷 Pick from Photos / Gallery
+              📷 Pick Specific Photos
+            </button>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="btn-text-action"
+              onClick={() => setIncludeDemoShots((prev) => !prev)}
+            >
+              {includeDemoShots ? "Hide the 20 sample test cards" : "Or explore the 20 sample demo cards"}
             </button>
           </div>
         </section>
-      ) : null}
+      )}
 
-      <section className="wall" aria-label="Screenshots">
-        {allShots.map((shot) => (
-          <ShotCard
-            key={shot.id}
-            shot={shot}
-            active={query.trim().length > 0}
-            onDelete={shot.isUserUploaded ? handleDelete : undefined}
-          />
-        ))}
-      </section>
+      {/* Clean Zero Search Results State */}
+      {hasNoSearchResults && (
+        <section className="empty-search">
+          <h3>No screenshots found</h3>
+          <p>
+            No pictures or screenshots match <strong>"{query}"</strong>.
+          </p>
+          <button
+            type="button"
+            className="btn-reset-search"
+            onClick={() => setQuery("")}
+          >
+            Clear Search
+          </button>
+        </section>
+      )}
+
+      {/* The Screenshot Wall */}
+      {allShots.length > 0 && (
+        <section className="wall" aria-label="Screenshots">
+          {allShots.map((shot) => (
+            <ShotCard
+              key={shot.id}
+              shot={shot}
+              active={isSearchActive}
+              onDelete={shot.isUserUploaded ? handleDelete : undefined}
+            />
+          ))}
+        </section>
+      )}
 
       {dragDepth > 0 ? (
         <div className="drop">
