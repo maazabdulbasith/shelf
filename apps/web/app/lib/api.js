@@ -1,7 +1,12 @@
-export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API = process.env.NEXT_PUBLIC_API_URL || "";
 
 export function thumbUrl(id) {
-  return `${API}/thumbs/${id}.jpg`;
+  if (!id) return "/thumbs/default.png";
+  if (String(id).startsWith("data:") || String(id).startsWith("http")) {
+    return id;
+  }
+  const clean = String(id).replace(/\.(png|jpg|jpeg|webp)$/i, "");
+  return `${API}/thumbs/${clean}.png`;
 }
 
 export async function fetchShots(query, signal) {
