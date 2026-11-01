@@ -28,6 +28,32 @@ export default function ShotCard({ shot, active, onDelete, onClick }) {
 
   const imageSrc = shot.src || thumbUrl(shot.id);
 
+  function onQuickCopy(e) {
+    e.stopPropagation();
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(async (blob) => {
+          if (blob && navigator.clipboard?.write) {
+            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+            setCopied("✓ Image Copied");
+            setTimeout(() => setCopied(""), 1800);
+          }
+        }, "image/png");
+      };
+      img.src = imageSrc;
+    } catch {
+      setCopied("Copy failed");
+      setTimeout(() => setCopied(""), 1800);
+    }
+  }
+
   return (
     <article
       className="card card-interactive"
@@ -55,6 +81,17 @@ export default function ShotCard({ shot, active, onDelete, onClick }) {
             onError={() => setBroken(true)}
           />
         )}
+
+        {/* Quick Copy Hover Badge */}
+        <button
+          type="button"
+          className="card-quick-copy"
+          onClick={onQuickCopy}
+          title="Copy image directly to clipboard"
+        >
+          {copied === "✓ Image Copied" ? "✓ Copied" : "📋 Copy"}
+        </button>
+
         {active
           ? (shot.highlights || []).map((line, index) => (
               <span
@@ -70,18 +107,24 @@ export default function ShotCard({ shot, active, onDelete, onClick }) {
             ))
           : null}
       </div>
+
       <div className="meta">
         <div className="kind">
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span>{shot.kind || shot.status || "shot"}</span>
+            <span className="card-kind-label">{shot.kind || shot.status || "shot"}</span>
             {shot.isUserUploaded && (
               shot.ocrDone ? (
-                <span className="badge-indexed" title="Text extracted from image and searchable">✓ Indexed</span>
+                <span className="badge-indexed" title="Text extracted from image and searchable">
+                  <span className="dot-green" /> Indexed
+                </span>
               ) : (
-                <span className="badge-scanning" title="Extracting text from image…">⏳ Reading…</span>
+                <span className="badge-scanning" title="Extracting text from image…">
+                  <span className="dot-amber" /> Reading…
+                </span>
               )
             )}
           </div>
+
           {shot.isUserUploaded && onDelete ? (
             <button
               type="button"
@@ -96,7 +139,18 @@ export default function ShotCard({ shot, active, onDelete, onClick }) {
             </button>
           ) : null}
         </div>
+
         <p className="caption">{shot.caption || "Reading this screenshot…"}</p>
+
+        {/* Semantic Tags Pills */}
+        {Array.isArray(shot.tags) && shot.tags.length > 0 && (
+          <div className="card-tags-list">
+            {shot.tags.slice(0, 3).map((tag, i) => (
+              <span key={i} className="card-tag-item">#{tag}</span>
+            ))}
+          </div>
+        )}
+
         {actions.length ? (
           <div className="chips">
             {actions.map((action, index) => (

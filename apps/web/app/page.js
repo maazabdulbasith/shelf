@@ -7,6 +7,7 @@ import AskDock from "./components/AskDock";
 import Logo from "./components/Logo";
 import ShotCard from "./components/ShotCard";
 import ShotModal from "./components/ShotModal";
+import SettingsModal from "./components/SettingsModal";
 import { askShelf, fetchShots } from "./lib/api";
 import { searchShots } from "./lib/search";
 import {
@@ -65,6 +66,8 @@ export default function Page() {
   const [isScanning, setIsScanning] = useState(false);
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const [viewingShot, setViewingShot] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [hasCustomKey, setHasCustomKey] = useState(false);
 
   const loaded = useRef(false);
   const fileInputRef = useRef(null);
@@ -96,6 +99,7 @@ export default function Page() {
           localStorage.removeItem("shelf_gemini_api_key");
         }
       } catch {}
+      setHasCustomKey(!!localStorage.getItem("shelf_gemini_api_key"));
     }
 
     if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
@@ -567,24 +571,19 @@ export default function Page() {
             <button
               type="button"
               className="btn-folder"
-              onClick={handleApiKeyPrompt}
-              title="Optional BYOK: Set a personal Gemini API key in this browser"
+              onClick={() => setIsSettingsOpen(true)}
+              title="AI Vision Engine & Indexing Settings"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                background: "rgba(243, 236, 223, 0.06)",
-                borderColor: "rgba(243, 236, 223, 0.14)",
-                color: "#cbbfaa",
+                gap: "6px",
+                background: hasCustomKey ? "rgba(16, 185, 129, 0.12)" : "rgba(243, 236, 223, 0.06)",
+                borderColor: hasCustomKey ? "rgba(16, 185, 129, 0.35)" : "rgba(243, 236, 223, 0.14)",
+                color: hasCustomKey ? "#6ee7b7" : "#cbbfaa",
               }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="7.5" cy="15.5" r="5.5" />
-                <path d="m11.5 11.5 8.5-8.5" />
-                <path d="M16 7l2 2" />
-                <path d="M18 5l2 2" />
-              </svg>
-              <span>BYOK (Optional)</span>
+              <span className={hasCustomKey ? "dot-green" : "dot-amber"} />
+              <span>{hasCustomKey ? "AI Vision Active" : "Connect AI Key"}</span>
             </button>
 
             {userShots.length > 0 && (
@@ -707,6 +706,19 @@ export default function Page() {
           onSelectShot={setViewingShot}
         />
       )}
+
+      {/* AI Vision Engine & BYOK Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onKeySaved={(newKey) => {
+          setHasCustomKey(!!newKey);
+          setIsSettingsOpen(false);
+          if (newKey) {
+            handleReindexOcr();
+          }
+        }}
+      />
 
       {dragDepth > 0 ? (
         <div className="drop">
