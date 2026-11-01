@@ -672,3 +672,313 @@ button { cursor: pointer; }
   border: 1px solid rgba(245, 158, 11, 0.3);
   font-family: monospace;
 }
+
+/* Card Clickable Hover & Cursor */
+.card-interactive {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-interactive:focus-visible {
+  outline: 2px solid #e4b15a;
+  outline-offset: 2px;
+}
+
+/* Lightbox Shot Modal */
+.shot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(8, 7, 6, 0.82);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.shot-modal-dialog {
+  width: min(1200px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: #14110d;
+  border: 1px solid rgba(243, 236, 223, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(228, 177, 90, 0.15);
+  overflow: hidden;
+  animation: modalScaleUp 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.shot-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(243, 236, 223, 0.08);
+  background: rgba(22, 19, 15, 0.6);
+}
+
+.shot-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.shot-modal-kind-badge {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e4b15a;
+  font-weight: 600;
+  background: rgba(228, 177, 90, 0.12);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(228, 177, 90, 0.25);
+}
+
+.shot-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f3ecdf;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 450px;
+}
+
+.shot-modal-close-btn {
+  background: rgba(243, 236, 223, 0.08);
+  border: 1px solid rgba(243, 236, 223, 0.12);
+  color: #cbbfaa;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 180ms ease;
+}
+
+.shot-modal-close-btn:hover {
+  background: rgba(243, 236, 223, 0.2);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.shot-modal-content {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 860px) {
+  .shot-modal-content {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+.shot-modal-image-stage {
+  position: relative;
+  background: #0a0907;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.shot-modal-image-wrapper {
+  max-width: 100%;
+  max-height: calc(92vh - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shot-modal-img {
+  max-width: 100%;
+  max-height: calc(92vh - 120px);
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.shot-modal-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(22, 19, 15, 0.8);
+  border: 1px solid rgba(243, 236, 223, 0.15);
+  color: #f3ecdf;
+  font-size: 28px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: all 180ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.shot-modal-nav-btn.prev { left: 16px; }
+.shot-modal-nav-btn.next { right: 16px; }
+
+.shot-modal-nav-btn:hover {
+  background: rgba(228, 177, 90, 0.3);
+  border-color: #e4b15a;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.shot-modal-sidebar {
+  padding: 24px;
+  background: #14110d;
+  border-left: 1px solid rgba(243, 236, 223, 0.08);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.shot-modal-actions-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shot-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms ease;
+  border: 1px solid transparent;
+}
+
+.shot-modal-btn.primary {
+  background: linear-gradient(135deg, #e4b15a, #d99a38);
+  color: #17120a;
+  box-shadow: 0 4px 18px rgba(228, 177, 90, 0.25);
+}
+
+.shot-modal-btn.primary:hover {
+  background: linear-gradient(135deg, #f0c57a, #e4b15a);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(228, 177, 90, 0.35);
+}
+
+.shot-modal-btn.share {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.shot-modal-btn.share:hover {
+  background: rgba(59, 130, 246, 0.25);
+  transform: translateY(-1px);
+}
+
+.shot-modal-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.shot-modal-btn.secondary {
+  background: rgba(243, 236, 223, 0.06);
+  color: #ded6c8;
+  border: 1px solid rgba(243, 236, 223, 0.12);
+  padding: 8px 12px;
+  font-size: 12.5px;
+}
+
+.shot-modal-btn.secondary:hover {
+  background: rgba(243, 236, 223, 0.12);
+  color: #fff;
+}
+
+.shot-modal-section h4 {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a19582;
+}
+
+.shot-modal-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.shot-modal-engine-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(228, 177, 90, 0.12);
+  color: #fde68a;
+  border: 1px solid rgba(228, 177, 90, 0.25);
+  font-family: monospace;
+}
+
+.shot-modal-caption {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: #f3ecdf;
+  font-family: Palatino, Georgia, serif;
+}
+
+.shot-modal-text-transcript {
+  background: #0d0b09;
+  border: 1px solid rgba(243, 236, 223, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.shot-modal-text-transcript pre {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ded6c8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.shot-modal-empty-text {
+  margin: 0;
+  font-size: 12px;
+  color: #78716c;
+  font-style: italic;
+}

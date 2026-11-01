@@ -6,6 +6,7 @@ import AmbientField from "./components/AmbientField";
 import AskDock from "./components/AskDock";
 import Logo from "./components/Logo";
 import ShotCard from "./components/ShotCard";
+import ShotModal from "./components/ShotModal";
 import { askShelf, fetchShots } from "./lib/api";
 import {
   clearAllLocalShots,
@@ -50,6 +51,7 @@ export default function Page() {
   const [hasDirectoryPicker, setHasDirectoryPicker] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [viewingShot, setViewingShot] = useState(null);
 
   const loaded = useRef(false);
   const fileInputRef = useRef(null);
@@ -646,9 +648,20 @@ export default function Page() {
               shot={shot}
               active={isSearchActive}
               onDelete={shot.isUserUploaded ? handleDelete : undefined}
+              onClick={(clicked) => setViewingShot(clicked)}
             />
           ))}
         </section>
+      )}
+
+      {/* Full-Screen Lightbox & Action Modal */}
+      {viewingShot && (
+        <ShotModal
+          shot={viewingShot}
+          allShots={allShots}
+          onClose={() => setViewingShot(null)}
+          onSelectShot={setViewingShot}
+        />
       )}
 
       {dragDepth > 0 ? (

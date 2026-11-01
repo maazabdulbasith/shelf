@@ -9,12 +9,13 @@ function transitionName(id) {
   return safe ? `card-${safe}` : undefined;
 }
 
-export default function ShotCard({ shot, active, onDelete }) {
+export default function ShotCard({ shot, active, onDelete, onClick }) {
   const [copied, setCopied] = useState("");
   const [broken, setBroken] = useState(false);
   const actions = (shot.actions || []).slice(0, 3);
 
-  function onAction(action) {
+  function onAction(action, e) {
+    e?.stopPropagation();
     if (action.kind === "delete_shot") {
       onDelete?.(shot.id);
       return;
@@ -28,7 +29,20 @@ export default function ShotCard({ shot, active, onDelete }) {
   const imageSrc = shot.src || thumbUrl(shot.id);
 
   return (
-    <article className="card" style={{ viewTransitionName: transitionName(shot.id) }}>
+    <article
+      className="card card-interactive"
+      style={{ viewTransitionName: transitionName(shot.id) }}
+      onClick={() => onClick?.(shot)}
+      tabIndex={0}
+      role="button"
+      aria-label={`View screenshot: ${shot.filename || shot.title || "image"}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.(shot);
+        }
+      }}
+    >
       <div className="frame">
         {broken ? (
           <div className="plate" />
@@ -72,7 +86,10 @@ export default function ShotCard({ shot, active, onDelete }) {
             <button
               type="button"
               className="btn-card-delete"
-              onClick={() => onDelete(shot.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(shot.id);
+              }}
               title="Remove from local shelf"
             >
               × Remove
@@ -87,7 +104,7 @@ export default function ShotCard({ shot, active, onDelete }) {
                 key={`${action.kind}-${action.value}`}
                 className={index === 0 ? "chip primary" : "chip"}
                 type="button"
-                onClick={() => onAction(action)}
+                onClick={(e) => onAction(action, e)}
               >
                 {copied === action.value ? "Copied" : action.label}
               </button>
