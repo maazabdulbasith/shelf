@@ -487,7 +487,23 @@ export default function Page() {
         <div className="brand">
           <Logo size={42} />
           <div>
-            <p className="word">Shelf</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <p className="word" style={{ margin: 0 }}>Shelf</p>
+              <span style={{
+                fontSize: "10.5px",
+                fontFamily: "ui-monospace, monospace",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                background: "rgba(228, 177, 90, 0.15)",
+                color: "#fde68a",
+                border: "1px solid rgba(228, 177, 90, 0.3)",
+                letterSpacing: "0.06em",
+                fontWeight: 600,
+                textTransform: "uppercase",
+              }}>
+                Beta
+              </span>
+            </div>
             <p className="line">Find the screenshot you remember.</p>
           </div>
         </div>
