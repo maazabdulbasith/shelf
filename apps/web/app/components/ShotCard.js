@@ -9,17 +9,23 @@ function transitionName(id) {
   return safe ? `card-${safe}` : undefined;
 }
 
-export default function ShotCard({ shot, active }) {
+export default function ShotCard({ shot, active, onDelete }) {
   const [copied, setCopied] = useState("");
   const [broken, setBroken] = useState(false);
   const actions = (shot.actions || []).slice(0, 3);
 
   function onAction(action) {
+    if (action.kind === "delete_shot") {
+      onDelete?.(shot.id);
+      return;
+    }
     runAction(action);
     if (!keepsText(action)) return;
     setCopied(action.value);
     window.setTimeout(() => setCopied(""), 1400);
   }
+
+  const imageSrc = shot.src || thumbUrl(shot.id);
 
   return (
     <article className="card" style={{ viewTransitionName: transitionName(shot.id) }}>
@@ -28,7 +34,7 @@ export default function ShotCard({ shot, active }) {
           <div className="plate" />
         ) : (
           <img
-            src={thumbUrl(shot.id)}
+            src={imageSrc}
             alt={shot.caption || shot.filename || "Screenshot"}
             loading="lazy"
             decoding="async"
@@ -51,7 +57,19 @@ export default function ShotCard({ shot, active }) {
           : null}
       </div>
       <div className="meta">
-        <div className="kind">{shot.kind || shot.status || "shot"}</div>
+        <div className="kind">
+          <span>{shot.kind || shot.status || "shot"}</span>
+          {shot.isUserUploaded && onDelete ? (
+            <button
+              type="button"
+              className="btn-card-delete"
+              onClick={() => onDelete(shot.id)}
+              title="Remove from local shelf"
+            >
+              × Remove
+            </button>
+          ) : null}
+        </div>
         <p className="caption">{shot.caption || "Reading this screenshot…"}</p>
         {actions.length ? (
           <div className="chips">
