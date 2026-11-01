@@ -58,7 +58,16 @@ export default function ShotCard({ shot, active, onDelete }) {
       </div>
       <div className="meta">
         <div className="kind">
-          <span>{shot.kind || shot.status || "shot"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>{shot.kind || shot.status || "shot"}</span>
+            {shot.isUserUploaded && (
+              shot.ocrDone ? (
+                <span className="badge-indexed" title="Text extracted from image and searchable">✓ Indexed</span>
+              ) : (
+                <span className="badge-scanning" title="Extracting text from image…">⏳ Reading…</span>
+              )
+            )}
+          </div>
           {shot.isUserUploaded && onDelete ? (
             <button
               type="button"

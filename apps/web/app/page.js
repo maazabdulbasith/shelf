@@ -11,8 +11,10 @@ import {
   clearAllLocalShots,
   deleteLocalShot,
   getLocalShots,
+  saveLocalShot,
   saveLocalShotsBatch,
 } from "./lib/db";
+import { runOcrOnImage } from "./lib/ocr";
 
 let rearranging = false;
 
@@ -47,18 +49,25 @@ export default function Page() {
   const [open, setOpen] = useState(false);
   const [hasDirectoryPicker, setHasDirectoryPicker] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
 
   const loaded = useRef(false);
   const fileInputRef = useRef(null);
+  const ocrRunningRef = useRef(false);
 
-  // 1. Load user's local shots from IndexedDB on mount
+  // 1. Load user's local shots from IndexedDB and auto-queue OCR for unindexed shots
   useEffect(() => {
     getLocalShots().then((local) => {
       const shots = local || [];
       setUserShots(shots);
-      // If user has zero local shots yet, include demo shots so the wall isn't completely bare on first open
       if (shots.length === 0) {
         setIncludeDemoShots(true);
+      } else {
+        // Find shots that still need text extraction
+        const unindexed = shots.filter((s) => !s.ocrDone && s.src);
+        if (unindexed.length > 0) {
+          queueOcrProcessing(unindexed);
+        }
       }
     });
 
@@ -67,7 +76,51 @@ export default function Page() {
     }
   }, []);
 
-  // 2. Fetch server/demo shots when active or searched
+  // 2. Background OCR worker queue
+  async function queueOcrProcessing(shotsToProcess) {
+    if (ocrRunningRef.current || !shotsToProcess.length) return;
+    ocrRunningRef.current = true;
+    setIsOcrRunning(true);
+
+    const total = shotsToProcess.length;
+    setNotice(`Running OCR on ${total} screenshot${total > 1 ? "s" : ""}…`);
+
+    for (let i = 0; i < total; i++) {
+      const shot = shotsToProcess[i];
+      setNotice(`Extracting text from picture ${i + 1} of ${total}: "${shot.filename}"…`);
+
+      try {
+        const ocr = await runOcrOnImage(shot.src, shot.filename);
+        const updatedShot = {
+          ...shot,
+          text: `${shot.filename} ${ocr.text || ""}`.trim(),
+          caption: ocr.caption || shot.caption,
+          kind: ocr.kind || shot.kind || "photo",
+          ocrDone: true,
+          ocrEngine: ocr.engine,
+          actions: ocr.action
+            ? [ocr.action, ...(shot.actions || [])]
+            : shot.actions || [],
+        };
+
+        await saveLocalShot(updatedShot);
+
+        // Update state in real time so card status and search update immediately
+        setUserShots((prev) =>
+          prev.map((s) => (s.id === shot.id ? updatedShot : s))
+        );
+      } catch (err) {
+        console.error("OCR failure on shot:", shot.id, err);
+      }
+    }
+
+    setIsOcrRunning(false);
+    ocrRunningRef.current = false;
+    setNotice(`✓ OCR completed for ${total} picture${total > 1 ? "s" : ""}. You can search any word!`);
+    setTimeout(() => setNotice(""), 4000);
+  }
+
+  // 3. Fetch server/demo shots when searched
   useEffect(() => {
     const controller = new AbortController();
     const handle = setTimeout(async () => {
@@ -93,7 +146,7 @@ export default function Page() {
     };
   }, [query]);
 
-  // 3. Global keyboard shortcuts and scroll pinning
+  // 4. Global keyboard shortcuts and scroll pinning
   useEffect(() => {
     const onKey = (event) => {
       const tag = document.activeElement?.tagName;
@@ -112,7 +165,6 @@ export default function Page() {
     };
   }, []);
 
-  // Read File as DataURL
   function readFileAsDataUrl(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -146,9 +198,10 @@ export default function Page() {
             filename: file.name,
             title: cleanName,
             text: file.name.toLowerCase().replace(/[-_.]/g, " "),
-            caption: `Photo: ${file.name}`,
+            caption: `Reading text from: ${file.name}…`,
             kind: "photo",
             status: "device",
+            ocrDone: false,
             isUserUploaded: true,
             created_at: Date.now(),
             actions: [
@@ -161,21 +214,22 @@ export default function Page() {
 
       const validShots = processedChunk.filter(Boolean);
       newShots.push(...validShots);
-      setNotice(`Processed ${Math.min(i + BATCH_SIZE, files.length)} of ${files.length}…`);
+      setNotice(`Imported ${Math.min(i + BATCH_SIZE, files.length)} of ${files.length}…`);
     }
 
     if (newShots.length > 0) {
       await saveLocalShotsBatch(newShots);
       setUserShots((prev) => [...newShots, ...prev]);
-      // Once user has their own photos, default demo dataset to off so their wall is pure
       setIncludeDemoShots(false);
-      setNotice(`Saved ${newShots.length} picture${newShots.length > 1 ? "s" : ""} to your local shelf.`);
+      setNotice(`Saved ${newShots.length} picture${newShots.length > 1 ? "s" : ""}. Starting text extraction…`);
+
+      // Trigger OCR processing queue on the new shots
+      queueOcrProcessing(newShots);
     } else {
       setNotice("No readable images found in selection.");
     }
 
     setIsScanning(false);
-    setTimeout(() => setNotice(""), 3500);
   }
 
   // Recursive directory scanner for File System Access API
@@ -215,14 +269,12 @@ export default function Page() {
         await processFilesBatch(foundFiles);
       } catch (err) {
         if (err.name !== "AbortError") {
-          // If directory picker fails, fall back to file picker
           fileInputRef.current?.click();
         } else {
           setNotice("");
         }
       }
     } else {
-      // Mobile or browsers without showDirectoryPicker
       fileInputRef.current?.click();
     }
   }
@@ -265,6 +317,13 @@ export default function Page() {
     setTimeout(() => setNotice(""), 2500);
   }
 
+  // Re-run OCR on all local shots that need it
+  function handleReindexOcr() {
+    const unindexed = userShots.filter((s) => !s.ocrDone && s.src);
+    const target = unindexed.length > 0 ? unindexed : userShots;
+    queueOcrProcessing(target);
+  }
+
   // Ask LlamaIndex synthesizer
   async function ask() {
     if (!question.trim() || asking) return;
@@ -282,12 +341,11 @@ export default function Page() {
   const qLower = query.trim().toLowerCase();
   const filteredUserShots = qLower
     ? userShots.filter((s) => {
-        return (
-          (s.title && s.title.toLowerCase().includes(qLower)) ||
-          (s.text && s.text.toLowerCase().includes(qLower)) ||
-          (s.caption && s.caption.toLowerCase().includes(qLower)) ||
-          (s.filename && s.filename.toLowerCase().includes(qLower))
-        );
+        const textMatch = s.text && s.text.toLowerCase().includes(qLower);
+        const titleMatch = s.title && s.title.toLowerCase().includes(qLower);
+        const captionMatch = s.caption && s.caption.toLowerCase().includes(qLower);
+        const filenameMatch = s.filename && s.filename.toLowerCase().includes(qLower);
+        return textMatch || titleMatch || captionMatch || filenameMatch;
       })
     : userShots;
 
@@ -301,12 +359,16 @@ export default function Page() {
       ? "Opening the wall"
       : isScanning
       ? "Scanning media…"
+      : isOcrRunning
+      ? "Running OCR…"
       : phase === "searching"
       ? "Rearranging"
       : `${allShots.length} on the wall`;
 
   const isSearchActive = query.trim().length > 0;
   const hasNoSearchResults = isSearchActive && allShots.length === 0;
+
+  const unindexedCount = userShots.filter((s) => !s.ocrDone).length;
 
   return (
     <div
@@ -388,8 +450,25 @@ export default function Page() {
                 <circle cx="9" cy="9" r="2" />
                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
-              <span>{hasDirectoryPicker ? "Scan Folder" : "Add from Gallery"}</span>
+              <span>{hasDirectoryPicker ? "Scan Folder" : "Add Photos"}</span>
             </button>
+
+            {unindexedCount > 0 && (
+              <button
+                type="button"
+                className="btn-gallery"
+                onClick={handleReindexOcr}
+                disabled={isOcrRunning}
+                style={{
+                  background: "rgba(245, 158, 11, 0.2)",
+                  borderColor: "rgba(245, 158, 11, 0.7)",
+                  color: "#fef08a",
+                }}
+                title="Extract text from scanned pictures"
+              >
+                <span>{isOcrRunning ? "Extracting Text…" : `⚡ Scan Text (${unindexedCount})`}</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -422,7 +501,7 @@ export default function Page() {
           <span className="permission-badge">Local-First Storage Access</span>
           <h2>Connect Your Photos & Screenshots</h2>
           <p>
-            Shelf runs 100% on your device with zero cloud tracking. Grant storage permission to scan your Pictures folder or pick screenshots directly from your device gallery.
+            Shelf runs 100% on your device with on-device OCR. Grant storage permission to scan your Pictures folder or pick screenshots directly from your gallery.
           </p>
           <div className="permission-actions">
             <button
