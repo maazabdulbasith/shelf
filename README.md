@@ -2,7 +2,7 @@
 
 > **Local-first screenshot search wall using OCR, pgvector hybrid search, and deterministic grounded RAG.**
 
-[![Live Standalone Product](https://img.shields.io/badge/Live_Product-shelf--pictures.vercel.app-06b6d4?style=for-the-badge&logo=vercel&logoColor=white)](https://shelf-pictures.vercel.app/)
+[![Live Standalone Product](https://img.shields.io/badge/Live_Product-theonlyshelf.vercel.app-06b6d4?style=for-the-badge&logo=vercel&logoColor=white)](https://theonlyshelf.vercel.app/)
 [![Interactive RRF Demo](https://img.shields.io/badge/Interactive_Demo-Portfolio_Showcase-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://abdul-basith-maaz-portfolio.vercel.app/demos/shelf)
 [![Recall@5](https://img.shields.io/badge/Recall@5-1.0000-emerald?style=for-the-badge)](#what-the-numbers-were)
 [![MRR](https://img.shields.io/badge/MRR-0.9028-blue?style=for-the-badge)](#what-the-numbers-were)
@@ -12,7 +12,7 @@ Shelf is a local search wall for screenshots. You type a phrase you remember. Th
 
 Your screenshots stay on this machine. There is no account, no cloud telemetry, and no bill.
 
-👉 **[Launch Live Standalone Product: shelf-pictures.vercel.app](https://shelf-pictures.vercel.app/)**  
+👉 **[Launch Live Standalone Product: theonlyshelf.vercel.app](https://theonlyshelf.vercel.app/)**  
 👉 **[Try the Portfolio Demo & RRF Decomposition](https://abdul-basith-maaz-portfolio.vercel.app/demos/shelf)**
 
 ---

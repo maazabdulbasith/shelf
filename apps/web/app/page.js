@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import AmbientField from "./components/AmbientField";
 import AskDock from "./components/AskDock";
+import Logo from "./components/Logo";
 import ShotCard from "./components/ShotCard";
 import { askShelf, fetchShots, uploadShot } from "./lib/api";
 
@@ -127,11 +128,7 @@ export default function Page() {
       <div className="veil" aria-hidden="true" />
       <header className={compact ? "mast compact" : "mast"}>
         <div className="brand">
-          <span className="mark" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
+          <Logo size={42} />
           <div>
             <p className="word">Shelf</p>
             <p className="line">Find the screenshot you remember.</p>
