@@ -34,3 +34,33 @@ export async function askShelf(question) {
   if (!response.ok) throw new Error("ask");
   return response.json();
 }
+
+export async function runAutoGPT(goal, maxSteps = 4) {
+  const response = await fetch(`${API}/v1/autogpt/investigate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goal, max_steps: maxSteps }),
+  });
+  if (!response.ok) throw new Error("autogpt");
+  return response.json();
+}
+
+export async function runExpenseCrew(query = "receipts and invoices") {
+  const response = await fetch(`${API}/v1/crews/expense-audit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!response.ok) throw new Error("expense_crew");
+  return response.json();
+}
+
+export async function runIncidentCrew(query = "nginx error logs and stack traces") {
+  const response = await fetch(`${API}/v1/crews/incident-triage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!response.ok) throw new Error("incident_crew");
+  return response.json();
+}
