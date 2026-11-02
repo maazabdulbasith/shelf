@@ -20,3 +20,5 @@ markdown>=3.7
 langfuse>=2
 llama-index-core>=0.12
 sqlalchemy>=2
+crewai>=1.15
+google-genai>=2.0

@@ -73,6 +73,10 @@ class AskBody(BaseModel):
     question: str
 
 
+class CrewQueryBody(BaseModel):
+    query: str = ""
+
+
 class WatchHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
@@ -131,6 +135,20 @@ def next_job() -> dict:
 def ask(body: AskBody) -> dict:
     hits = search(get_store(), body.question, mode="hybrid_rerank", limit=5)
     return llamaindex_answer(body.question, hits)
+
+
+@app.post("/v1/crews/expense-audit")
+def crew_expense_audit(body: CrewQueryBody) -> dict:
+    from .crews import run_expense_audit
+    q = body.query.strip() or "receipts, invoices, and expenses"
+    return run_expense_audit(q)
+
+
+@app.post("/v1/crews/incident-triage")
+def crew_incident_triage(body: CrewQueryBody) -> dict:
+    from .crews import run_incident_triage
+    q = body.query.strip() or "error logs and terminal crashes"
+    return run_incident_triage(q)
 
 
 @app.post("/v1/reembed")
