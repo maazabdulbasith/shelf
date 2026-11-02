@@ -77,6 +77,11 @@ class CrewQueryBody(BaseModel):
     query: str = ""
 
 
+class AutoGPTGoalBody(BaseModel):
+    goal: str
+    max_steps: int = 5
+
+
 class WatchHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
@@ -149,6 +154,13 @@ def crew_incident_triage(body: CrewQueryBody) -> dict:
     from .crews import run_incident_triage
     q = body.query.strip() or "error logs and terminal crashes"
     return run_incident_triage(q)
+
+
+@app.post("/v1/autogpt/investigate")
+def autogpt_investigate(body: AutoGPTGoalBody) -> dict:
+    from .autogpt import run_autonomous_investigation
+    g = body.goal.strip() or "Audit visual memory for pending tasks and invoices"
+    return run_autonomous_investigation(g, max_steps=body.max_steps)
 
 
 @app.post("/v1/reembed")
