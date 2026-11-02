@@ -64,18 +64,22 @@ class AutoGPTVisualInvestigator:
         }
 
     def _call_llm(self, prompt: str) -> str:
-        """Invokes Gemini 2.5 Flash using google-genai or fallback client."""
+        """Invokes Gemini using google-genai or fallback client."""
         try:
             from google import genai
             client = genai.Client(api_key=self.api_key)
+            model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            if model_name.startswith("gemini/"):
+                model_name = model_name.replace("gemini/", "")
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model_name,
                 contents=prompt,
                 config={"response_mime_type": "application/json"}
             )
             return response.text or "{}"
         except Exception as exc:
-            # Fallback for offline testing or mock environments
+            import logging
+            logging.getLogger("shelf.autogpt").warning(f"Live LLM call failed ({exc}); using fallback.")
             return self._mock_fallback_step(prompt, str(exc))
 
     def _mock_fallback_step(self, prompt: str, error_msg: str) -> str:

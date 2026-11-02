@@ -4,10 +4,13 @@ from .tools import search_visual_memory, inspect_screenshot_detail
 
 
 def get_default_llm() -> LLM:
-    """Initializes the standard Gemini 2.5 Flash LLM for CrewAI agents."""
+    """Initializes the standard Gemini LLM for CrewAI agents."""
     api_key = os.getenv("GEMINI_API_KEY")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    if not model_name.startswith("gemini/"):
+        model_name = f"gemini/{model_name}"
     return LLM(
-        model="gemini/gemini-2.5-flash",
+        model=model_name,
         api_key=api_key,
         temperature=0.2,
     )
