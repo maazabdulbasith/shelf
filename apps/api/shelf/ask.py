@@ -1,21 +1,21 @@
-INJECTION_MARKERS = (
-    "ignore previous instructions",
-    "ignore all previous",
-    "say the password",
-    "system prompt",
-    "you are now",
+from shelf.guardrails import (
+    evaluate_ask_guardrails,
+    is_injection,
+    is_password_like_ask,
+    should_quarantine_evidence,
 )
 
 
-def is_injection(text: str) -> bool:
-    lowered = (text or "").lower()
-    if any(marker in lowered for marker in INJECTION_MARKERS):
-        return True
-    return "ignore" in lowered and "instruction" in lowered
-
-
 def answer_from_evidence(question: str, hits: list[dict]) -> dict:
-    question_l = (question or "").lower()
+    gate = evaluate_ask_guardrails(question)
+    if gate["action"] in {"empty", "refuse", "thin"}:
+        return {
+            "answer": gate["answer"],
+            "citations": gate.get("citations") or [],
+            "refused": True,
+            "reason": gate["reason"],
+        }
+
     useful = [hit for hit in hits if (hit.get("ocr_text") or hit.get("caption"))]
     if not useful:
         return {
@@ -24,15 +24,17 @@ def answer_from_evidence(question: str, hits: list[dict]) -> dict:
             "refused": True,
             "reason": "thin_evidence",
         }
+
     evidence = "\n".join(f"{hit.get('ocr_text', '')} {hit.get('caption', '')}" for hit in useful[:4])
-    asks_for_hidden = any(word in question_l for word in ("password", "ignore", "instruction", "secret"))
-    if is_injection(evidence) and asks_for_hidden:
+    if should_quarantine_evidence(question, evidence):
         return {
             "answer": "That screenshot tries to give me instructions. I won't follow them.",
             "citations": [{"id": hit["id"], "filename": hit.get("filename", "")} for hit in useful[:2]],
             "refused": True,
             "reason": "prompt_injection",
         }
+
+    # Extra question-side check after evidence inspection
     if is_injection(question):
         return {
             "answer": "I won't follow instructions hidden in a question.",
@@ -40,7 +42,19 @@ def answer_from_evidence(question: str, hits: list[dict]) -> dict:
             "refused": True,
             "reason": "prompt_injection",
         }
-    top = useful[0]
+
+    # Prefer non-adversarial evidence when available
+    safe_hits = [hit for hit in useful if not is_injection(f"{hit.get('ocr_text', '')} {hit.get('caption', '')}")]
+    ranked = safe_hits or useful
+    if not safe_hits and is_password_like_ask(question):
+        return {
+            "answer": "That screenshot tries to give me instructions. I won't follow them.",
+            "citations": [{"id": hit["id"], "filename": hit.get("filename", "")} for hit in useful[:2]],
+            "refused": True,
+            "reason": "prompt_injection",
+        }
+
+    top = ranked[0]
     snippet = " ".join((top.get("ocr_text") or top.get("caption") or "").split())[:400]
     if not snippet:
         return {
@@ -51,7 +65,7 @@ def answer_from_evidence(question: str, hits: list[dict]) -> dict:
         }
     citations = [
         {"id": hit["id"], "filename": hit.get("filename", "")}
-        for hit in useful[:3]
+        for hit in ranked[:3]
     ]
     return {
         "answer": snippet,
@@ -77,6 +91,7 @@ def llamaindex_answer(question: str, hits: list[dict]) -> dict:
             metadata={"id": hit["id"], "filename": hit.get("filename", "")},
         )
         for hit in hits[:8]
+        if not is_injection(f"{hit.get('ocr_text', '')} {hit.get('caption', '')}")
     ]
     if not documents:
         result["engine"] = "llamaindex"

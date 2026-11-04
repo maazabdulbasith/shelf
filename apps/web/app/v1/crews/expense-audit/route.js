@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
+import { isAgentInjectionGoal } from "../../../lib/guardrails.mjs";
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const query = (body.query || "").trim() || "receipts, invoices, and bills";
-    const qLower = query.toLowerCase();
 
-    if (
-      qLower.includes("ignore previous") ||
-      qLower.includes("say the password") ||
-      qLower.includes("reveal the password") ||
-      (qLower.includes("ignore") && qLower.includes("instruction")) ||
-      (qLower.includes("inject") && qLower.includes("password"))
-    ) {
+    if (isAgentInjectionGoal(query)) {
       return NextResponse.json({
         crew: "expense_auditor",
         query,

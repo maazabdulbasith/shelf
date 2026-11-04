@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAgentInjectionGoal } from "../../../lib/guardrails.mjs";
 
 export async function POST(request) {
   try {
@@ -7,20 +8,7 @@ export async function POST(request) {
     const maxSteps = Math.min(Math.max(body.max_steps || 3, 1), 6);
     const goalLower = goal.toLowerCase();
 
-    const injectionMarkers = [
-      "ignore previous instructions",
-      "ignore all previous",
-      "say the password",
-      "reveal the password",
-      "system prompt",
-      "you are now",
-      "override",
-    ];
-    if (
-      injectionMarkers.some((m) => goalLower.includes(m)) ||
-      (goalLower.includes("ignore") && goalLower.includes("instruction")) ||
-      (goalLower.includes("inject") && goalLower.includes("password"))
-    ) {
+    if (isAgentInjectionGoal(goal)) {
       return NextResponse.json({
         goal,
         steps_taken: 0,
