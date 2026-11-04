@@ -7,6 +7,32 @@ export async function POST(request) {
     const maxSteps = Math.min(Math.max(body.max_steps || 3, 1), 6);
     const goalLower = goal.toLowerCase();
 
+    const injectionMarkers = [
+      "ignore previous instructions",
+      "ignore all previous",
+      "say the password",
+      "reveal the password",
+      "system prompt",
+      "you are now",
+      "override",
+    ];
+    if (
+      injectionMarkers.some((m) => goalLower.includes(m)) ||
+      (goalLower.includes("ignore") && goalLower.includes("instruction")) ||
+      (goalLower.includes("inject") && goalLower.includes("password"))
+    ) {
+      return NextResponse.json({
+        goal,
+        steps_taken: 0,
+        completed: false,
+        refused: true,
+        reason: "prompt_injection",
+        final_report:
+          "Refused: the goal contains adversarial instruction markers or asks to follow inject.png. Shelf agents do not execute prompt-injection goals.",
+        trace: [],
+      });
+    }
+
     const fastApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
     if (fastApiUrl) {
       try {

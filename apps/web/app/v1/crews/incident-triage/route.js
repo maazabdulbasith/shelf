@@ -4,6 +4,25 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const query = (body.query || "").trim() || "nginx error logs and stack traces";
+    const qLower = query.toLowerCase();
+
+    if (
+      qLower.includes("ignore previous") ||
+      qLower.includes("say the password") ||
+      qLower.includes("reveal the password") ||
+      (qLower.includes("ignore") && qLower.includes("instruction")) ||
+      (qLower.includes("dump") && qLower.includes("password"))
+    ) {
+      return NextResponse.json({
+        crew: "incident_investigator",
+        query,
+        refused: true,
+        reason: "prompt_injection",
+        agents: [],
+        result:
+          "Refused: adversarial instruction markers detected. SRE triage will not exfiltrate credentials or follow inject.png instructions.",
+      });
+    }
 
     const fastApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
     if (fastApiUrl) {

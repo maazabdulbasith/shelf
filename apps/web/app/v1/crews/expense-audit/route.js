@@ -4,6 +4,25 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const query = (body.query || "").trim() || "receipts, invoices, and bills";
+    const qLower = query.toLowerCase();
+
+    if (
+      qLower.includes("ignore previous") ||
+      qLower.includes("say the password") ||
+      qLower.includes("reveal the password") ||
+      (qLower.includes("ignore") && qLower.includes("instruction")) ||
+      (qLower.includes("inject") && qLower.includes("password"))
+    ) {
+      return NextResponse.json({
+        crew: "expense_auditor",
+        query,
+        refused: true,
+        reason: "prompt_injection",
+        agents: [],
+        result:
+          "Refused: adversarial instruction markers detected in the crew query. Expense audit will not follow inject.png or password-exfil goals.",
+      });
+    }
 
     const fastApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
     if (fastApiUrl) {
