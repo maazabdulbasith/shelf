@@ -9,8 +9,12 @@ export function thumbUrl(id) {
   return `${API}/thumbs/${clean}.png`;
 }
 
-export async function fetchShots(query, signal) {
-  const url = query ? `${API}/v1/shots?q=${encodeURIComponent(query)}` : `${API}/v1/shots`;
+export async function fetchShots(query, signal, options = {}) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (options.includeColorEval) params.set("include_color_eval", "1");
+  const qs = params.toString();
+  const url = qs ? `${API}/v1/shots?${qs}` : `${API}/v1/shots`;
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error("shots");
   const body = await response.json();

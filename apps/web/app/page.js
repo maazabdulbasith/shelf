@@ -38,26 +38,31 @@ function applyShots(next, setShots) {
 }
 
 const QUICK_FILTERS = [
-  { label: "All", icon: "✨", query: "" },
-  { label: "Receipts & Bills", icon: "🧾", query: "receipt" },
-  { label: "Code & Dev", icon: "💻", query: "code" },
-  { label: "Nature & Travel", icon: "✈️", query: "boarding" },
-  { label: "Dashboards", icon: "📊", query: "dashboard" },
-  { label: "Chats & Messages", icon: "💬", query: "chat" },
-  { label: "Family & People", icon: "👨‍👩‍👧", query: "family" },
-  { label: "Food & Drinks", icon: "🍔", query: "food" },
+  { label: "All (12)", icon: "✨", query: "" },
+  { label: "Errors & Logs", icon: "🚨", query: "nginx" },
+  { label: "Terminal & Dev", icon: "💻", query: "docker" },
+  { label: "Receipts & Menus", icon: "🧾", query: "coffee" },
+  { label: "Flights & Travel", icon: "✈️", query: "boarding" },
+  { label: "Wi-Fi & Locations", icon: "📍", query: "wifi" },
+  { label: "Notes & Security", icon: "🛡️", query: "shelftoken" },
+  { label: "Visual Colors (CLIP)", icon: "🎨", query: "solid color" },
 ];
+
+const COLOR_EVAL_QUERY = /solid\s*color|color\s*field|\b(blue|red|green|yellow|purple|orange|black|white)\b/i;
 
 export default function Page() {
   const [query, setQuery] = useState("");
   const [serverShots, setServerShots] = useState([]);
   const [userShots, setUserShots] = useState([]);
-  const [includeDemoShots, setIncludeDemoShots] = useState(false);
+  const [includeDemoShots, setIncludeDemoShots] = useState(true);
+  const [includeColorEval, setIncludeColorEval] = useState(false);
   const [phase, setPhase] = useState("loading");
   const [notice, setNotice] = useState("");
   const [dragDepth, setDragDepth] = useState(0);
   const [pinned, setPinned] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioTab, setStudioTab] = useState("ask");
+  const [studioSeedQuery, setStudioSeedQuery] = useState("");
   const [hasDirectoryPicker, setHasDirectoryPicker] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isOcrRunning, setIsOcrRunning] = useState(false);
@@ -187,11 +192,12 @@ export default function Page() {
   // 3. Fetch server/demo shots when searched
   useEffect(() => {
     const controller = new AbortController();
+    const wantsColorEval = includeColorEval || COLOR_EVAL_QUERY.test(query);
     const handle = setTimeout(async () => {
       setPhase((current) => (current === "loading" ? "loading" : "searching"));
       let next = [];
       try {
-        next = await fetchShots(query, controller.signal);
+        next = await fetchShots(query, controller.signal, { includeColorEval: wantsColorEval });
       } catch (error) {
         if (error.name === "AbortError") return;
         setNotice(loaded.current ? "Search did not finish." : "Shelf is running local-first.");
@@ -208,7 +214,35 @@ export default function Page() {
       clearTimeout(handle);
       controller.abort();
     };
-  }, [query]);
+  }, [query, includeColorEval]);
+
+  function openStudio(tab = "ask", seed = "") {
+    setStudioTab(tab);
+    setStudioSeedQuery(seed);
+    setIsStudioOpen(true);
+  }
+
+  function runTryDemo(kind) {
+    if (kind === "nginx") {
+      setQuery("nginx");
+      setIncludeDemoShots(true);
+      return;
+    }
+    if (kind === "maple") {
+      setQuery("maple street");
+      setIncludeDemoShots(true);
+      return;
+    }
+    if (kind === "password") {
+      setIncludeDemoShots(true);
+      openStudio("ask", "what is the password?");
+      return;
+    }
+    if (kind === "sre") {
+      setIncludeDemoShots(true);
+      openStudio("crew_incident", "nginx error 504 upstream timed out port 8000");
+    }
+  }
 
   // 4. Global keyboard shortcuts and scroll pinning
   useEffect(() => {
@@ -414,13 +448,11 @@ export default function Page() {
         <div className="brand">
           <Logo size={42} />
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <p className="word" style={{ margin: 0 }}>Shelf</p>
-              <span className="badge-startup-beta">
-                Tri-Tier Agents
-              </span>
+              <span className="badge-startup-beta">Local-First Demo</span>
             </div>
-            <p className="line">Multimodal visual semantic memory for everything on your screen.</p>
+            <p className="line">Find any screenshot from a phrase you remember — OCR, hybrid search, click-to-act.</p>
           </div>
         </div>
 
@@ -429,7 +461,7 @@ export default function Page() {
           <input
             id="search"
             type="search"
-            placeholder="Search keywords, OCR text, or visual objects…"
+            placeholder="Try nginx, maple street, wifi…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             autoComplete="off"
@@ -459,30 +491,29 @@ export default function Page() {
             {countLabel}
           </p>
           <div className="mast-actions">
-            {/* Direct Agent Studio Trigger Button */}
-            <button
-              type="button"
-              className="btn-agent-studio-nav"
-              onClick={() => setIsStudioOpen(true)}
-              title="Open Autonomous Agent Studio"
-            >
-              <span className="agent-orb-mini" />
-              <span>Agent Swarm</span>
-            </button>
-
             <button
               type="button"
               className="btn-gallery"
               onClick={onGrantPermission}
               disabled={isScanning}
-              title="Grant storage permission to scan photos"
+              title="Upload or scan screenshots into local shelf"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
                 <circle cx="9" cy="9" r="2" />
                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
-              <span>{hasDirectoryPicker ? "Scan Folder" : "Add Photos"}</span>
+              <span>Upload Screenshots</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-agent-studio-nav"
+              onClick={() => openStudio("ask", "")}
+              title="Open Ask & Agents"
+            >
+              <span className="agent-orb-mini" />
+              <span>Ask & Agents</span>
             </button>
 
             {unindexedCount > 0 && (
@@ -498,35 +529,19 @@ export default function Page() {
                 }}
                 title="Extract text from scanned pictures"
               >
-                <span>{isOcrRunning ? "Analyzing Visual AI…" : `⚡ Scan AI (${unindexedCount})`}</span>
+                <span>{isOcrRunning ? "Analyzing…" : `Reindex (${unindexedCount})`}</span>
               </button>
             )}
 
             <button
               type="button"
-              className="btn-folder"
-              onClick={() => setIncludeDemoShots((prev) => !prev)}
-              title="Toggle 20 golden sample screenshots"
-            >
-              <span>{includeDemoShots ? "Hide Demos" : "Show Demos"}</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn-folder"
+              className="btn-folder btn-settings-compact"
               onClick={() => setIsSettingsOpen(true)}
               title="AI Vision Engine & Indexing Settings"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                background: hasCustomKey ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.06)",
-                borderColor: hasCustomKey ? "rgba(16, 185, 129, 0.35)" : "rgba(255, 255, 255, 0.12)",
-                color: hasCustomKey ? "#6ee7b7" : "#cbd5e1",
-              }}
+              aria-label={hasCustomKey ? "AI Vision Active" : "AI Key settings"}
             >
               <span className={hasCustomKey ? "dot-green" : "dot-amber"} />
-              <span>{hasCustomKey ? "AI Vision Active" : "Connect AI Key"}</span>
+              <span className="settings-label">{hasCustomKey ? "AI On" : "AI Key"}</span>
             </button>
 
             {userShots.length > 0 && (
@@ -543,6 +558,72 @@ export default function Page() {
         </div>
       </header>
 
+      {/* 30-second executive summary — always above the fold when demos/wall are present */}
+      {(includeDemoShots || allShots.length > 0) && (
+        <section className="exec-summary" aria-label="Executive summary">
+          <div className="exec-summary-head">
+            <span className="exec-kicker">30-second overview</span>
+            <h2>Shelf finds the screenshot you remember — then one click runs the useful action.</h2>
+          </div>
+          <div className="exec-summary-grid">
+            <div className="exec-col">
+              <h3>The problem</h3>
+              <p>
+                We screenshot errors, receipts, Wi-Fi cards, tickets, and addresses instead of taking notes —
+                then lose them in a camera roll because filenames have no meaning.
+              </p>
+            </div>
+            <div className="exec-col">
+              <h3>How Shelf works</h3>
+              <p>
+                Local-first visual memory: OCR tokens + bounding boxes, dense text (`bge-small`), and CLIP visuals
+                fused with Reciprocal Rank Fusion (`k=60`). Nothing leaves this device by default.
+              </p>
+            </div>
+            <div className="exec-col">
+              <h3>Try the demo in 20 seconds</h3>
+              <div className="exec-try-row">
+                <button type="button" className="exec-try-pill" onClick={() => runTryDemo("nginx")}>
+                  Search &quot;nginx&quot;
+                </button>
+                <button type="button" className="exec-try-pill" onClick={() => runTryDemo("maple")}>
+                  Search &quot;maple street&quot;
+                </button>
+                <button type="button" className="exec-try-pill" onClick={() => runTryDemo("password")}>
+                  Ask &quot;what is the password?&quot;
+                </button>
+                <button type="button" className="exec-try-pill accent" onClick={() => runTryDemo("sre")}>
+                  Run SRE Triage Crew
+                </button>
+              </div>
+              <div className="exec-secondary-row">
+                <button type="button" className="btn-text-action" onClick={onGrantPermission}>
+                  Upload / scan your own photos
+                </button>
+                <button
+                  type="button"
+                  className="btn-text-action"
+                  onClick={() => setIncludeDemoShots((prev) => !prev)}
+                >
+                  {includeDemoShots ? "Hide demo cards" : "Show demo cards"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-text-action"
+                  onClick={() => {
+                    setIncludeColorEval((prev) => !prev);
+                    if (!includeColorEval) setQuery("solid color");
+                    else if (query === "solid color") setQuery("");
+                  }}
+                >
+                  {includeColorEval ? "Hide CLIP color eval" : "Show CLIP color eval (8)"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Quick Visual Category Filter Bar */}
       <nav className="quick-filter-bar" aria-label="Visual Categories">
         <div className="quick-filter-inner">
@@ -556,7 +637,10 @@ export default function Page() {
                 key={f.label}
                 type="button"
                 className={isActive ? "quick-filter-pill active" : "quick-filter-pill"}
-                onClick={() => setQuery(isActive && f.query !== "" ? "" : f.query)}
+                onClick={() => {
+                  if (f.query === "solid color") setIncludeColorEval(true);
+                  setQuery(isActive && f.query !== "" ? "" : f.query);
+                }}
               >
                 <span>{f.icon}</span>
                 <span>{f.label}</span>
@@ -568,72 +652,28 @@ export default function Page() {
 
       {notice ? <p className="notice">{notice}</p> : null}
 
-      {/* Vibrant Startup Hero Showcase */}
-      {userShots.length === 0 && !isSearchActive && (
+      {/* Empty state only when demos are hidden and no local shots */}
+      {allShots.length === 0 && !isSearchActive && !includeDemoShots && (
         <section className="permission-hero">
-          <span className="permission-badge">✨ Next-Gen Visual Intelligence · Zero Cloud Data Leak</span>
-          <h2>Search Everything Your Eyes Ever Saw.</h2>
+          <span className="permission-badge">Local-first · No account · Screenshots stay on device</span>
+          <h2>Search everything you already screenshotted.</h2>
           <p>
-            Shelf runs 100% on your device with on-device WebAssembly OCR, hybrid pgvector RRF retrieval,
-            and autonomous AutoGPT & CrewAI agent swarms for instant financial audits and SRE triage.
+            Type a phrase you remember. Matching cards reorder, the OCR line highlights, and one action
+            waits for your click. Or open the 12 golden demo cards to try the wall immediately.
           </p>
-
-          {/* 4 Startup Stat Chips */}
-          <div className="hero-stat-grid">
-            <div className="hero-stat-card emerald">
-              <span className="stat-value">1.000</span>
-              <span className="stat-label">RRF Recall@5 (vs 0.833 Baseline)</span>
-            </div>
-            <div className="hero-stat-card cyan">
-              <span className="stat-value">~600ms</span>
-              <span className="stat-label">Client-Side WASM OCR Engine</span>
-            </div>
-            <div className="hero-stat-card violet">
-              <span className="stat-value">CrewAI 3-Agent</span>
-              <span className="stat-label">Expense & SRE Incident Teams</span>
-            </div>
-            <div className="hero-stat-card coral">
-              <span className="stat-value">AutoGPT ReAct</span>
-              <span className="stat-label">Autonomous Self-Criticism Loop</span>
-            </div>
-          </div>
-
           <div className="permission-actions">
-            <button
-              type="button"
-              className="btn-primary-grant"
-              onClick={onGrantPermission}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-              </svg>
-              <span>{hasDirectoryPicker ? "Grant Storage Permission & Scan Media" : "Select Photos from Gallery"}</span>
+            <button type="button" className="btn-primary-grant" onClick={onGrantPermission}>
+              <span>{hasDirectoryPicker ? "Upload / Scan Screenshots" : "Select Photos"}</span>
             </button>
-
             <button
               type="button"
               className="btn-secondary-action"
-              onClick={() => setIsStudioOpen(true)}
+              onClick={() => setIncludeDemoShots(true)}
             >
-              ⚡ Launch Agent Swarm
+              Show golden demo cards
             </button>
-
-            <button
-              type="button"
-              className="btn-secondary-action"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              📷 Pick Specific Photos
-            </button>
-          </div>
-
-          <div>
-            <button
-              type="button"
-              className="btn-text-action"
-              onClick={() => setIncludeDemoShots((prev) => !prev)}
-            >
-              {includeDemoShots ? "Hide the 20 golden demo cards" : "Or explore the 20 golden demo cards"}
+            <button type="button" className="btn-secondary-action" onClick={() => openStudio("ask", "")}>
+              Ask &amp; Agents
             </button>
           </div>
         </section>
@@ -705,6 +745,10 @@ export default function Page() {
       <AgentStudio
         isOpen={isStudioOpen}
         onToggle={() => setIsStudioOpen((prev) => !prev)}
+        hideLauncher={!!viewingShot || isStudioOpen}
+        initialTab={studioTab}
+        seedQuery={studioSeedQuery}
+        onSeedConsumed={() => setStudioSeedQuery("")}
       />
     </div>
   );

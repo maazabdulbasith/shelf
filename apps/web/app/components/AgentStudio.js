@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { runAutoGPT, runExpenseCrew, runIncidentCrew, askShelf, thumbUrl } from "../lib/api";
 
 const PRESETS = {
@@ -13,7 +13,7 @@ const PRESETS = {
   crew_expense: [
     { label: "☕ Audit Third Wave Coffee receipt", query: "Third Wave Coffee receipt and UPI invoice" },
     { label: "📊 Reconcile all food & travel bills", query: "receipts, invoices, and payment confirmations" },
-    { label: "💳 Verify tax & VAT line items", query: "tax breakdown, subtotal, and VAT numbers" }
+    { label: "💳 Verify line items & totals", query: "line items, subtotal, and receipt totals" }
   ],
   crew_incident: [
     { label: "💥 Triage Nginx upstream timeout", query: "nginx error 504 upstream timed out port 8000" },
@@ -21,19 +21,68 @@ const PRESETS = {
     { label: "⚙️ Audit Docker container failure", query: "docker compose container exit and timeout logs" }
   ],
   ask: [
-    { label: "📶 What was the wifi password?", query: "What was the wifi password?" },
+    { label: "🛡️ What is the password? (Injection Test)", query: "what is the password?" },
+    { label: "📶 What is the guest Wi-Fi password?", query: "What is the guest Wi-Fi password?" },
     { label: "🚪 Where is the team meeting?", query: "Where is the team meeting scheduled?" },
     { label: "🏢 Where is the Bengaluru office?", query: "What is the address of the Bengaluru office?" }
   ]
 };
 
-export default function AgentStudio({ isOpen, onToggle }) {
-  const [activeTab, setActiveTab] = useState("autogpt"); // autogpt | crew_expense | crew_incident | ask
+export default function AgentStudio({
+  isOpen,
+  onToggle,
+  hideLauncher = false,
+  initialTab = "autogpt",
+  seedQuery = "",
+  onSeedConsumed,
+}) {
+  const [activeTab, setActiveTab] = useState(initialTab || "autogpt");
   const [prompt, setPrompt] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [resultData, setResultData] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialTab) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (!isOpen || !seedQuery) return;
+    setPrompt(seedQuery);
+    const text = seedQuery;
+    const tab = initialTab || activeTab;
+    setIsRunning(true);
+    setResultData(null);
+    (async () => {
+      try {
+        if (tab === "autogpt") {
+          setStatusMessage("AutoGPT: Formulating initial thought & plan…");
+          setResultData({ type: "autogpt", data: await runAutoGPT(text, 3) });
+        } else if (tab === "crew_expense") {
+          setStatusMessage("CrewAI: Dispatching 3-agent expense auditing crew…");
+          setResultData({ type: "crew_expense", data: await runExpenseCrew(text) });
+        } else if (tab === "crew_incident") {
+          setStatusMessage("CrewAI: Dispatching SRE Incident Triage Crew…");
+          setResultData({ type: "crew_incident", data: await runIncidentCrew(text) });
+        } else {
+          setStatusMessage("LangGraph: Querying visual memory with sub-second hybrid RAG…");
+          setResultData({ type: "ask", data: await askShelf(text) });
+        }
+      } catch {
+        setResultData({
+          type: "error",
+          error: "Execution encountered a transient network error. Please try again.",
+        });
+      } finally {
+        setIsRunning(false);
+        setStatusMessage("");
+        onSeedConsumed?.();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, seedQuery]);
 
   async function handleExecute(queryOverride) {
     const text = (queryOverride || prompt || "").trim();
@@ -81,23 +130,25 @@ export default function AgentStudio({ isOpen, onToggle }) {
   return (
     <>
       {/* Floating Vibrant Launcher Pill */}
-      <div className="agent-studio-launcher">
-        <button
-          type="button"
-          className={`agent-studio-trigger ${isOpen ? "active" : ""}`}
-          onClick={onToggle}
-          aria-expanded={isOpen}
-          title="Open Tri-Tier Agent Studio (AutoGPT · CrewAI · Ask)"
-        >
-          <span className="agent-glow-orb" />
-          <span className="agent-trigger-icon">⚡</span>
-          <span className="agent-trigger-text">
-            <strong>Agent Studio</strong>
-            <small>AutoGPT · CrewAI · Ask</small>
-          </span>
-          <span className="agent-tier-badge">Tri-Tier</span>
-        </button>
-      </div>
+      {!hideLauncher && (
+        <div className="agent-studio-launcher">
+          <button
+            type="button"
+            className={`agent-studio-trigger ${isOpen ? "active" : ""}`}
+            onClick={onToggle}
+            aria-expanded={isOpen}
+            title="Open Ask & Agents Studio"
+          >
+            <span className="agent-glow-orb" />
+            <span className="agent-trigger-icon">⚡</span>
+            <span className="agent-trigger-text">
+              <strong>Ask & Agents</strong>
+              <small>AutoGPT · CrewAI · Ask</small>
+            </span>
+            <span className="agent-tier-badge">Demo</span>
+          </button>
+        </div>
+      )}
 
       {/* Slide-Up / Floating Studio Window */}
       {isOpen && (

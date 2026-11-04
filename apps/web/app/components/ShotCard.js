@@ -160,7 +160,7 @@ export default function ShotCard({ shot, active, onDelete, onClick }) {
                 type="button"
                 onClick={(e) => onAction(action, e)}
               >
-                {copied === action.value ? "Copied" : action.label}
+                {copied === action.value ? "Copied!" : action.label}
               </button>
             ))}
           </div>

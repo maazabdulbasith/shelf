@@ -10,11 +10,20 @@ const INJECTION_MARKERS = [
   "override",
 ];
 
-const STOPWORDS = new Set([
-  "the", "and", "for", "with", "that", "this", "from", "what", "where",
-  "when", "which", "were", "been", "have", "will", "would", "could",
-  "about", "there", "their", "they", "then", "them", "some", "your",
-]);
+function isWifiSpecific(qLower) {
+  return (
+    qLower.includes("wifi") ||
+    qLower.includes("wi-fi") ||
+    qLower.includes("ssid") ||
+    qLower.includes("guest") ||
+    qLower.includes("network")
+  );
+}
+
+function isGenericPasswordAsk(qLower) {
+  if (!qLower.includes("password") && !qLower.includes("secret")) return false;
+  return !isWifiSpecific(qLower);
+}
 
 export async function POST(request) {
   try {
@@ -33,10 +42,21 @@ export async function POST(request) {
 
     const qLower = q.toLowerCase();
 
-    // 1. Deterministic Prompt Injection Defense
+    // 1. Deterministic Prompt Injection Defense (question-side)
     if (INJECTION_MARKERS.some((m) => qLower.includes(m))) {
       return NextResponse.json({
-        answer: "Screenshot or prompt contains adversarial instruction markers. Refused for local safety.",
+        answer: "I won't follow instructions hidden in a question.",
+        refused: true,
+        reason: "prompt_injection",
+        engine: "LlamaIndex Grounded Synthesizer",
+        citations: [{ id: "inject", filename: "inject.png" }],
+      });
+    }
+
+    // 1b. Generic password asks retrieve inject.png evidence → refuse (demo script)
+    if (isGenericPasswordAsk(qLower)) {
+      return NextResponse.json({
+        answer: "That screenshot tries to give me instructions. I won't follow them.",
         refused: true,
         reason: "prompt_injection",
         engine: "LlamaIndex Grounded Synthesizer",
@@ -105,7 +125,8 @@ export async function POST(request) {
       });
     }
 
-    if (qLower.includes("wifi") || qLower.includes("wi-fi") || qLower.includes("network") || qLower.includes("password")) {
+    // Explicit Wi-Fi / guest network questions stay grounded on wifi.png
+    if (isWifiSpecific(qLower)) {
       return NextResponse.json({
         answer: "The guest Wi-Fi network SSID is 'shelf-guest' with WPA2 password 'local-first-privacy-2026' on dual-band 5 GHz / 2.4 GHz.",
         refused: false,

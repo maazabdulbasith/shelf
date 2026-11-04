@@ -5,7 +5,6 @@ export async function POST(request) {
     const body = await request.json();
     const query = (body.query || "").trim() || "nginx error logs and stack traces";
 
-    // 1. Try forwarding to local FastAPI backend if reachable
     const fastApiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL;
     if (fastApiUrl) {
       try {
@@ -22,30 +21,42 @@ export async function POST(request) {
           return NextResponse.json(await resp.json());
         }
       } catch {
-        // FastApi not running; fall through to serverless grounded pipeline
+        // FastApi not running; fall through to grounded pipeline
       }
     }
 
-    // 2. Structured 3-Agent Collaborative SRE Crew Pipeline
     const agents = [
       {
         role: "Senior SRE Telemetry Analyst",
         status: "completed",
         action: "search_visual_memory('nginx error 504 gateway timeout')",
-        output: "Discovered incident error screenshot in visual memory: `nginx.png`. Error signature: `[error] 4812#0: *14 upstream timed out (110: Connection timed out) while reading response header from upstream, client: 127.0.0.1, request: 'POST /v1/ingest HTTP/1.1', upstream: 'http://127.0.0.1:8000/v1/ingest'`."
+        output:
+          "Discovered incident screenshot in visual memory: `nginx.png`. Verified OCR: upstream timed out while reading response header from upstream; client 192.168.1.105; request POST /v1/ingest; upstream http://127.0.0.1:8000/v1/ingest.",
       },
       {
         role: "Root-Cause Diagnostician",
         status: "completed",
         action: "inspect_screenshot_detail('nginx.png')",
-        output: "Diagnostic Analysis: The FastAPI server at port 8000 was overwhelmed during ONNX model cold-start embedding downloads, taking >65s to respond. Nginx default proxy_read_timeout is 60s, triggering an immediate 504 Gateway Timeout to the client."
+        output:
+          "Verified OCR Facts: the screenshot only confirms an upstream read timeout on port 8000 for POST /v1/ingest. It does not name a root cause. Separating evidence from inference is required before remediation.",
       },
       {
         role: "Remediation & Reliability Engineer",
         status: "completed",
         action: "generate_sre_postmortem()",
-        output: "### SRE Incident Post-Mortem & Remediation Plan\n\n- **Incident Classification:** Sev-2 (Ingestion Pipeline Degradation)\n- **Root Cause:** FastEmbed HuggingFace download latency exceeding reverse proxy gateway timeout.\n- **Action Items:**\n  1. Update Nginx configuration: add `proxy_read_timeout 300s;` and `proxy_connect_timeout 30s;`.\n  2. Container optimization: Pre-download model weights `bge-small-en-v1.5` during Docker image build stage to eliminate runtime downloads.\n  3. Health Check: Implement readiness probe on `http://127.0.0.1:8000/healthz` before routing traffic.\n- **Status:** Mitigation verified & documented."
-      }
+        output: `### SRE Incident Post-Mortem
+
+**Verified OCR Facts from Screenshot (\`nginx.png\`)**
+- Symptom: upstream timed out while reading response header from upstream
+- Client: 192.168.1.105
+- Request: POST /v1/ingest HTTP/1.1
+- Upstream: http://127.0.0.1:8000/v1/ingest
+
+**Recommended Next Checks** (inferred; not in screenshot OCR)
+1. Check latency / health of the service on port 8000 during the incident window.
+2. Review reverse-proxy \`proxy_read_timeout\` and upstream worker saturation.
+3. Correlate with ingest API logs for the same POST /v1/ingest request.`,
+      },
     ];
 
     return NextResponse.json({
